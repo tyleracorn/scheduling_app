@@ -75,5 +75,7 @@ docker/       Entrypoint (migrate, seed, start)
 
 - [x] **Phase 0:** Auth, admin, health, Docker scaffold
 - [x] **Phase 1:** `GET /api/v1/calendar`, month grid, period banner, week detail drawer
+- [x] **Phase 2:** Household notes and green/red occupancy (CRUD, calendar display, retention filter)
+- [x] **Phase 3:** Period CRUD, priority order, round-based draft (pick/skip/timeouts/hold), coordinator resume/force-skip, minute scheduler, draft UI on calendar + `/periods`
 
-Re-seed to load demo assignments: `pnpm db:seed`
+Re-seed to load demo data: `pnpm db:seed`

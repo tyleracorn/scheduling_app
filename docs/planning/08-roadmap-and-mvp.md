@@ -111,7 +111,7 @@ gantt
 
 ---
 
-### Phase 2: Notes and occupancy (1.5 weeks)
+### Phase 2: Notes and occupancy (1.5 weeks) — **implemented**
 
 **Objective:** Informational layers on calendar.
 

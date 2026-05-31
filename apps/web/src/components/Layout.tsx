@@ -18,6 +18,16 @@ export function Layout() {
             Cabin Schedule
           </Link>
           <nav className="flex items-center gap-4 text-sm">
+            {user && (
+              <Link to="/periods" className="text-slate-600 hover:text-slate-900">
+                Periods
+              </Link>
+            )}
+            {user && (
+              <Link to="/settings" className="text-slate-600 hover:text-slate-900">
+                Settings
+              </Link>
+            )}
             {user?.isAdmin && (
               <Link to="/admin" className="text-slate-600 hover:text-slate-900">
                 Admin

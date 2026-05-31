@@ -23,6 +23,9 @@ async function main() {
       pickWindowHours: 72,
       pickWarningLeadHours: 12,
       historyRetentionYears: 3,
+      periodWeekCount: 14,
+      openLeadDays: 30,
+      periodsToSchedule: 4,
     },
     update: {},
   });
@@ -135,7 +138,7 @@ async function seedDemoCalendar(adminUserId: string) {
   if (upcoming) {
     await prisma.schedulingPeriod.delete({ where: { id: upcoming.id } });
   }
-  await prisma.schedulingPeriod.create({
+  const upcomingPeriod = await prisma.schedulingPeriod.create({
     data: {
       name: "Upcoming scheduling period",
       startDate: nextStart,
@@ -145,6 +148,103 @@ async function seedDemoCalendar(adminUserId: string) {
       createdByUserId: adminUserId,
     },
   });
+  const upcomingWeeks = computePeriodWeeks(nextStart, nextEnd, settings.weekStartDay);
+  await prisma.periodWeek.createMany({
+    data: upcomingWeeks.map((r) => ({
+      schedulingPeriodId: upcomingPeriod.id,
+      weekStartDate: r.weekStartDate,
+      weekEndDate: r.weekEndDate,
+      sortOrder: r.sortOrder,
+    })),
+  });
+  await prisma.periodHouseholdPriority.createMany({
+    data: households.map((h, i) => ({
+      schedulingPeriodId: upcomingPeriod.id,
+      householdId: h.id,
+      position: i + 1,
+    })),
+  });
+
+  await seedDemoNotesAndOccupancy(adminUserId, households, year, month);
+}
+
+async function seedDemoNotesAndOccupancy(
+  adminUserId: string,
+  households: { id: string; name: string }[],
+  year: number,
+  month: number,
+) {
+  const sampleStart = new Date(Date.UTC(year, month, 10));
+  const sampleEnd = new Date(Date.UTC(year, month, 16));
+
+  await prisma.calendarNote.deleteMany({
+    where: { body: { startsWith: "[demo]" } },
+  });
+
+  if (households[1]) {
+    await prisma.calendarNote.create({
+      data: {
+        householdId: households[1].id,
+        startDate: sampleStart,
+        endDate: sampleEnd,
+        body: "[demo] Flexible this week if possible.",
+        createdByUserId: adminUserId,
+      },
+    });
+  }
+  if (households[0]) {
+    await prisma.calendarNote.create({
+      data: {
+        householdId: households[0].id,
+        startDate: new Date(Date.UTC(year, month, 5)),
+        endDate: new Date(Date.UTC(year, month, 5)),
+        body: "[demo] Family visiting — may overlap weekends.",
+        createdByUserId: adminUserId,
+      },
+    });
+    const greenStart = new Date(Date.UTC(year, month, 12));
+    const greenEnd = new Date(Date.UTC(year, month, 14));
+    const hasGreen = await prisma.occupancyIndicator.findFirst({
+      where: {
+        householdId: households[0].id,
+        startDate: greenStart,
+        endDate: greenEnd,
+        status: "green",
+      },
+    });
+    if (!hasGreen) {
+      await prisma.occupancyIndicator.create({
+        data: {
+          householdId: households[0].id,
+          startDate: greenStart,
+          endDate: greenEnd,
+          status: "green",
+          createdByUserId: adminUserId,
+        },
+      });
+    }
+  }
+  if (households[2]) {
+    const hasRed = await prisma.occupancyIndicator.findFirst({
+      where: {
+        householdId: households[2].id,
+        startDate: sampleStart,
+        endDate: sampleEnd,
+        status: "red",
+      },
+    });
+    if (!hasRed) {
+      await prisma.occupancyIndicator.create({
+        data: {
+          householdId: households[2].id,
+          startDate: sampleStart,
+          endDate: sampleEnd,
+          status: "red",
+          createdByUserId: adminUserId,
+        },
+      });
+    }
+  }
 }
 
 main()

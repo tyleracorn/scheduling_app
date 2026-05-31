@@ -120,6 +120,10 @@ model SystemSettings {
   pickWindowHours             Int      @default(72) @map("pick_window_hours")
   pickWarningLeadHours        Int      @default(12) @map("pick_warning_lead_hours")
   historyRetentionYears       Int      @default(3) @map("history_retention_years")
+  periodFirstWeekStart        DateTime? @map("period_first_week_start") @db.Date
+  periodWeekCount             Int      @default(13) @map("period_week_count")
+  openLeadDays                Int      @default(30) @map("open_lead_days")
+  periodsToSchedule           Int      @default(4) @map("periods_to_schedule")
   updatedAt                   DateTime @updatedAt @map("updated_at")
   updatedByUserId             String?  @map("updated_by_user_id") @db.Uuid
 

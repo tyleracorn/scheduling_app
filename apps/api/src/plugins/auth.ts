@@ -66,4 +66,12 @@ export function requireAdmin(request: FastifyRequest): AuthUser {
   return user;
 }
 
+export function requireCoordinator(request: FastifyRequest): AuthUser {
+  const user = requireAuth(request);
+  if (!user.isCoordinator && !user.isAdmin) {
+    throw new AppError(403, "forbidden", "Coordinator access required");
+  }
+  return user;
+}
+
 export default fp(authPlugin, { name: "auth" });

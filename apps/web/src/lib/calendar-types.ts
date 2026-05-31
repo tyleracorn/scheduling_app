@@ -20,6 +20,8 @@ export type CalendarPeriod = {
   id: string;
   name: string;
   status: string;
+  start_date?: string;
+  end_date?: string;
   draft_summary?: {
     current_round: number;
     on_hold: boolean;
@@ -31,11 +33,29 @@ export type CalendarPeriod = {
   };
 };
 
+export type CalendarNote = {
+  id: string;
+  household_id: string;
+  household_name: string;
+  start_date: string;
+  end_date: string;
+  body: string;
+};
+
+export type OccupancyIndicator = {
+  id: string;
+  household_id: string;
+  household_name: string;
+  start_date: string;
+  end_date: string;
+  status: "green" | "red";
+};
+
 export type CalendarResponse = {
   range: { start: string; end: string };
   settings: { cabin_timezone: string; week_start_day: number };
   periods: CalendarPeriod[];
   weeks: CalendarWeek[];
-  notes: unknown[];
-  occupancy: unknown[];
+  notes: CalendarNote[];
+  occupancy: OccupancyIndicator[];
 };

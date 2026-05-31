@@ -1,5 +1,7 @@
+import { Link } from "react-router-dom";
 import type { CalendarPeriod } from "../lib/calendar-types";
 import { formatPeriodStatus } from "../lib/calendar-utils";
+import { calendarPathForPeriod } from "../lib/period-navigation";
 
 export function PeriodStatusBanner({ periods }: { periods: CalendarPeriod[] }) {
   const active = periods.filter((p) => p.status !== "published" && p.status !== "archived");
@@ -21,6 +23,19 @@ export function PeriodStatusBanner({ periods }: { periods: CalendarPeriod[] }) {
                 ? "Draft on hold — coordinator action needed"
                 : `Waiting for ${p.draft_summary.active_turn.household_name} to pick`}
             </span>
+          )}
+          {p.status === "draft" && (
+            <span className="block mt-2 text-amber-900">
+              Pick or skip weeks in the <strong>Draft</strong> panel below (not by clicking days).
+            </span>
+          )}
+          {p.start_date && (p.status === "draft" || p.status === "open" || p.status === "assignment") && (
+            <Link
+              to={calendarPathForPeriod(p.start_date)}
+              className="inline-block mt-2 text-sm font-medium text-amber-900 underline hover:text-amber-950"
+            >
+              View weeks on calendar →
+            </Link>
           )}
         </div>
       ))}

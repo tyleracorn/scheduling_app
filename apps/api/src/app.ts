@@ -11,6 +11,9 @@ import { healthRoutes } from "./routes/health.js";
 import { authRoutes } from "./routes/auth.js";
 import { adminRoutes } from "./routes/admin.js";
 import calendarRoutes from "./routes/calendar.js";
+import notesRoutes from "./routes/notes.js";
+import occupancyRoutes from "./routes/occupancy.js";
+import periodsRoutes from "./routes/periods.js";
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -29,6 +32,9 @@ export async function buildApp() {
   await app.register(authRoutes);
   await app.register(adminRoutes);
   await app.register(calendarRoutes);
+  await app.register(notesRoutes);
+  await app.register(occupancyRoutes);
+  await app.register(periodsRoutes);
 
   app.setErrorHandler((error, _request, reply) => {
     if (error instanceof AppError) {

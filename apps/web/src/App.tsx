@@ -7,6 +7,8 @@ import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { CalendarPage } from "./pages/CalendarPage";
 import { AdminPage } from "./pages/AdminPage";
+import { SettingsPage } from "./pages/SettingsPage";
+import { PeriodsPage } from "./pages/PeriodsPage";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -37,6 +39,8 @@ function AppRoutes() {
         }
       >
         <Route index element={<CalendarPage />} />
+        <Route path="settings" element={<SettingsPage />} />
+        <Route path="periods" element={<PeriodsPage />} />
         <Route
           path="admin"
           element={

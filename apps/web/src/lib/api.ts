@@ -1,4 +1,5 @@
-import type { CalendarResponse } from "./calendar-types";
+import type { CalendarNote, CalendarResponse, OccupancyIndicator } from "./calendar-types";
+import type { DraftState, Period, PeriodPlan } from "./period-types";
 
 export type AuthUser = {
   id: string;
@@ -13,13 +14,14 @@ export type AuthUser = {
 type ApiError = { error?: { code: string; message: string; details?: unknown }; message?: string };
 
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
+  const headers = new Headers(init?.headers);
+  if (init?.body != null && init.body !== "" && !headers.has("Content-Type")) {
+    headers.set("Content-Type", "application/json");
+  }
   const res = await fetch(path, {
     ...init,
     credentials: "include",
-    headers: {
-      "Content-Type": "application/json",
-      ...init?.headers,
-    },
+    headers,
   });
   if (res.status === 204) return undefined as T;
   const body = (await res.json().catch(() => ({}))) as ApiError;
@@ -67,4 +69,112 @@ export const api = {
     ),
   calendar: (start: string, end: string) =>
     request<CalendarResponse>(`/api/v1/calendar?start=${start}&end=${end}`),
+  createNote: (data: { start_date: string; end_date: string; body: string }) =>
+    request<{ note: CalendarNote }>("/api/v1/notes", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updateNote: (id: string, data: { start_date: string; end_date: string; body: string }) =>
+    request<{ note: CalendarNote }>(`/api/v1/notes/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  deleteNote: (id: string) => request<void>(`/api/v1/notes/${id}`, { method: "DELETE" }),
+  createOccupancy: (data: { start_date: string; end_date: string; status: "green" | "red" }) =>
+    request<{ occupancy: OccupancyIndicator }>("/api/v1/occupancy", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updateOccupancy: (
+    id: string,
+    data: { start_date: string; end_date: string; status: "green" | "red" },
+  ) =>
+    request<{ occupancy: OccupancyIndicator }>(`/api/v1/occupancy/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  deleteOccupancy: (id: string) =>
+    request<void>(`/api/v1/occupancy/${id}`, { method: "DELETE" }),
+  periodPlan: () => request<{ plan: PeriodPlan }>("/api/v1/periods/plan"),
+  savePeriodPlan: (plan: {
+    first_week_start: string;
+    weeks_per_period: number;
+    open_lead_days: number;
+    rounds_per_household: number;
+    periods_to_schedule: number;
+    week_start_day: number;
+  }) =>
+    request<{ plan: PeriodPlan }>("/api/v1/periods/plan", {
+      method: "PUT",
+      body: JSON.stringify(plan),
+    }),
+  generatePeriods: (replace_unstarted?: boolean) =>
+    request<{
+      created: { id: string; name: string; start_date: string; end_date: string }[];
+      skipped: string[];
+    }>("/api/v1/periods/generate", {
+      method: "POST",
+      body: JSON.stringify({ replace_unstarted: replace_unstarted ?? false }),
+    }),
+  deletePeriod: (id: string) =>
+    request<{ ok: boolean }>(`/api/v1/periods/${id}`, { method: "DELETE" }),
+  periods: (params?: { status?: string; year?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.status) q.set("status", params.status);
+    if (params?.year) q.set("year", String(params.year));
+    const qs = q.toString();
+    return request<{ periods: Period[] }>(`/api/v1/periods${qs ? `?${qs}` : ""}`);
+  },
+  period: (id: string) => request<{ period: Period }>(`/api/v1/periods/${id}`),
+  createPeriod: (data: {
+    name: string;
+    start_date: string;
+    end_date: string;
+    opening_at: string;
+  }) =>
+    request<{ period: Period }>("/api/v1/periods", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updatePeriod: (
+    id: string,
+    data: Partial<{ name: string; start_date: string; end_date: string; opening_at: string }>,
+  ) =>
+    request<{ period: Period }>(`/api/v1/periods/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
+  setPeriodPriorities: (id: string, priorities: { household_id: string; position: number }[]) =>
+    request<{ period: Period }>(`/api/v1/periods/${id}/priorities`, {
+      method: "PUT",
+      body: JSON.stringify({ priorities }),
+    }),
+  startDraft: (id: string) =>
+    request<{ draft: DraftState }>(`/api/v1/periods/${id}/start-draft`, { method: "POST" }),
+  draft: (id: string) => request<{ draft: DraftState }>(`/api/v1/periods/${id}/draft`),
+  pickWeek: (periodId: string, turnId: string, period_week_id: string) =>
+    request<{ draft: DraftState }>(`/api/v1/periods/${periodId}/turns/${turnId}/pick`, {
+      method: "POST",
+      body: JSON.stringify({ period_week_id }),
+    }),
+  skipTurn: (periodId: string, turnId: string) =>
+    request<{ draft: DraftState }>(`/api/v1/periods/${periodId}/turns/${turnId}/skip`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
+  resumeDraft: (periodId: string, reset_auto_skip_counter = true) =>
+    request<{ draft: DraftState }>(`/api/v1/periods/${periodId}/draft/resume`, {
+      method: "POST",
+      body: JSON.stringify({ reset_auto_skip_counter }),
+    }),
+  forceSkipTurn: (periodId: string, turnId: string) =>
+    request<{ draft: DraftState }>(
+      `/api/v1/periods/${periodId}/turns/${turnId}/force-skip`,
+      { method: "POST", body: JSON.stringify({}) },
+    ),
+  coordinatorPick: (periodId: string, turnId: string, period_week_id: string) =>
+    request<{ draft: DraftState }>(
+      `/api/v1/periods/${periodId}/turns/${turnId}/coordinator-pick`,
+      { method: "POST", body: JSON.stringify({ period_week_id }) },
+    ),
 };
