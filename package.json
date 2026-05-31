@@ -1,0 +1,26 @@
+{
+  "name": "scheduling-app",
+  "private": true,
+  "scripts": {
+    "dev": "pnpm --parallel --filter @scheduling/api --filter @scheduling/web dev",
+    "dev:api": "pnpm --filter @scheduling/api dev",
+    "dev:web": "pnpm --filter @scheduling/web dev",
+    "dev:api": "pnpm --filter @scheduling/api dev",
+    "dev:web": "pnpm --filter @scheduling/web dev",
+    "build": "pnpm --filter @scheduling/web build && pnpm --filter @scheduling/api build",
+    "lint": "pnpm -r lint",
+    "typecheck": "pnpm -r typecheck",
+    "db:generate": "pnpm --filter @scheduling/api db:generate",
+    "db:migrate": "dotenv -e .env -- pnpm --filter @scheduling/api db:migrate",
+    "db:migrate:deploy": "dotenv -e .env -- pnpm --filter @scheduling/api db:migrate:deploy",
+    "db:seed": "dotenv -e .env -- pnpm --filter @scheduling/api db:seed",
+    "db:studio": "pnpm --filter @scheduling/api db:studio"
+  },
+  "engines": {
+    "node": ">=22"
+  },
+  "packageManager": "pnpm@9.15.0",
+  "devDependencies": {
+    "dotenv-cli": "^8.0.0"
+  }
+}

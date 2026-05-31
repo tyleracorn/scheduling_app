@@ -1,0 +1,15 @@
+# Dev: database only — run API and web locally with pnpm dev
+services:
+  db:
+    image: postgres:16-alpine
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: cabin
+      POSTGRES_PASSWORD: cabin
+      POSTGRES_DB: cabin_scheduling
+    volumes:
+      - postgres_data_dev:/var/lib/postgresql/data
+
+volumes:
+  postgres_data_dev:

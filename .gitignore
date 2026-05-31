@@ -1,0 +1,14 @@
+# Accidental nested clone — do not commit
+scheduling_app/
+
+node_modules/
+dist/
+.env
+.env.local
+*.log
+.DS_Store
+coverage/
+.turbo/
+apps/api/prisma/*.db
+.test-cookies*.txt
+.test-login.json

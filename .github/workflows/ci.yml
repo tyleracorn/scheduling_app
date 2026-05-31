@@ -1,0 +1,50 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16-alpine
+        env:
+          POSTGRES_USER: cabin
+          POSTGRES_PASSWORD: cabin
+          POSTGRES_DB: cabin_scheduling_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U cabin -d cabin_scheduling_test"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 5
+
+    env:
+      DATABASE_URL: postgresql://cabin:cabin@localhost:5432/cabin_scheduling_test
+      SESSION_SECRET: ci-test-session-secret-min-32-chars
+      SEED_ADMIN_EMAIL: admin@test.com
+      SEED_ADMIN_PASSWORD: testpass123
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9.15.0
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+
+      - run: pnpm install
+
+      - run: pnpm db:generate
+      - run: pnpm --filter @scheduling/api exec prisma migrate deploy
+      - run: pnpm typecheck
+      - run: pnpm build
