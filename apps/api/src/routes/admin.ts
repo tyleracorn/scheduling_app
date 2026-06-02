@@ -6,6 +6,11 @@ import { generateToken, hashToken, normalizeEmail } from "../lib/tokens.js";
 import { requireAdmin } from "../plugins/auth.js";
 import { sendEmail, inviteLink } from "../services/email.js";
 import { assertCoordinatorLimit } from "../services/coordinators.js";
+import {
+  formatSystemSettingsForApi,
+  pickWarningLeadHoursFromDays,
+  pickWindowHoursFromDays,
+} from "../lib/settings-format.js";
 
 const householdSchema = z.object({
   name: z.string().min(1).max(100),
@@ -25,11 +30,10 @@ const userPatchSchema = z.object({
 });
 
 const settingsSchema = z.object({
-  cabin_timezone: z.string().min(1).max(64).optional(),
   week_start_day: z.number().int().min(0).max(6).optional(),
   week_selections_per_household: z.number().int().min(1).max(10).optional(),
-  pick_window_hours: z.number().int().min(1).max(336).optional(),
-  pick_warning_lead_hours: z.number().int().min(1).max(168).optional(),
+  pick_window_days: z.number().int().min(1).max(14).optional(),
+  pick_warning_lead_days: z.number().int().min(0).max(7).optional(),
   history_retention_years: z.number().int().min(1).max(20).optional(),
 });
 
@@ -161,16 +165,7 @@ export async function adminRoutes(app: FastifyInstance) {
 
   app.get("/api/v1/admin/settings", async () => {
     const settings = await prisma.systemSettings.findUniqueOrThrow({ where: { id: 1 } });
-    return {
-      settings: {
-        cabin_timezone: settings.cabinTimezone,
-        week_start_day: settings.weekStartDay,
-        week_selections_per_household: settings.weekSelectionsPerHousehold,
-        pick_window_hours: settings.pickWindowHours,
-        pick_warning_lead_hours: settings.pickWarningLeadHours,
-        history_retention_years: settings.historyRetentionYears,
-      },
-    };
+    return { settings: formatSystemSettingsForApi(settings) };
   });
 
   app.put("/api/v1/admin/settings", async (request) => {
@@ -183,24 +178,20 @@ export async function adminRoutes(app: FastifyInstance) {
     const settings = await prisma.systemSettings.update({
       where: { id: 1 },
       data: {
-        cabinTimezone: d.cabin_timezone,
         weekStartDay: d.week_start_day,
         weekSelectionsPerHousehold: d.week_selections_per_household,
-        pickWindowHours: d.pick_window_hours,
-        pickWarningLeadHours: d.pick_warning_lead_hours,
+        pickWindowHours:
+          d.pick_window_days !== undefined
+            ? pickWindowHoursFromDays(d.pick_window_days)
+            : undefined,
+        pickWarningLeadHours:
+          d.pick_warning_lead_days !== undefined
+            ? pickWarningLeadHoursFromDays(d.pick_warning_lead_days)
+            : undefined,
         historyRetentionYears: d.history_retention_years,
         updatedByUserId: admin.id,
       },
     });
-    return {
-      settings: {
-        cabin_timezone: settings.cabinTimezone,
-        week_start_day: settings.weekStartDay,
-        week_selections_per_household: settings.weekSelectionsPerHousehold,
-        pick_window_hours: settings.pickWindowHours,
-        pick_warning_lead_hours: settings.pickWarningLeadHours,
-        history_retention_years: settings.historyRetentionYears,
-      },
-    };
+    return { settings: formatSystemSettingsForApi(settings) };
   });
 }

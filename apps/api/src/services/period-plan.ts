@@ -1,9 +1,41 @@
 import { AppError } from "../lib/errors.js";
+import type { PeriodStatus } from "@prisma/client";
 import { addDays, parseDateString, toDateString } from "../lib/dates.js";
 import { startOfWeek } from "../lib/dates.js";
 import { computePeriodWeeksExact } from "../lib/period-weeks.js";
 import { prisma } from "../lib/prisma.js";
 import { createPeriod, getSystemSettings } from "./periods.js";
+
+/** Periods that occupy calendar time — generation must not overlap these. */
+const BLOCKING_STATUSES: PeriodStatus[] = [
+  "scheduled",
+  "open",
+  "draft",
+  "assignment",
+  "published",
+];
+
+async function findOverlappingPeriod(periodStart: Date, endDate: Date) {
+  return prisma.schedulingPeriod.findFirst({
+    where: {
+      startDate: { lte: endDate },
+      endDate: { gte: periodStart },
+      status: { in: BLOCKING_STATUSES },
+    },
+  });
+}
+
+function formatBlockingStatus(status: PeriodStatus): string {
+  const labels: Record<PeriodStatus, string> = {
+    scheduled: "scheduled",
+    open: "open",
+    draft: "draft",
+    assignment: "assignment",
+    published: "published",
+    archived: "archived",
+  };
+  return labels[status] ?? status;
+}
 
 export function formatPeriodPlan(settings: Awaited<ReturnType<typeof getSystemSettings>>) {
   return {
@@ -11,7 +43,6 @@ export function formatPeriodPlan(settings: Awaited<ReturnType<typeof getSystemSe
       ? toDateString(settings.periodFirstWeekStart)
       : null,
     weeks_per_period: settings.periodWeekCount,
-    open_lead_days: settings.openLeadDays,
     rounds_per_household: settings.weekSelectionsPerHousehold,
     periods_to_schedule: settings.periodsToSchedule,
     week_start_day: settings.weekStartDay,
@@ -26,7 +57,6 @@ export async function getPeriodPlan() {
 export async function savePeriodPlan(input: {
   first_week_start: string;
   weeks_per_period: number;
-  open_lead_days: number;
   rounds_per_household: number;
   periods_to_schedule: number;
   week_start_day: number;
@@ -34,9 +64,6 @@ export async function savePeriodPlan(input: {
 }) {
   if (input.weeks_per_period < 1 || input.weeks_per_period > 52) {
     throw new AppError(400, "validation_error", "weeks_per_period must be 1–52");
-  }
-  if (input.open_lead_days < 0 || input.open_lead_days > 365) {
-    throw new AppError(400, "validation_error", "open_lead_days must be 0–365");
   }
   if (input.rounds_per_household < 1 || input.rounds_per_household > 10) {
     throw new AppError(400, "validation_error", "rounds_per_household must be 1–10");
@@ -53,7 +80,6 @@ export async function savePeriodPlan(input: {
     data: {
       periodFirstWeekStart: parseDateString(input.first_week_start),
       periodWeekCount: input.weeks_per_period,
-      openLeadDays: input.open_lead_days,
       weekSelectionsPerHousehold: input.rounds_per_household,
       periodsToSchedule: input.periods_to_schedule,
       weekStartDay: input.week_start_day,
@@ -61,20 +87,6 @@ export async function savePeriodPlan(input: {
     },
   });
   return getPeriodPlan();
-}
-
-function openingAtForPeriod(periodStart: Date, openLeadDays: number): Date {
-  const openDate = addDays(periodStart, -openLeadDays);
-  return new Date(
-    Date.UTC(
-      openDate.getUTCFullYear(),
-      openDate.getUTCMonth(),
-      openDate.getUTCDate(),
-      15,
-      0,
-      0,
-    ),
-  );
 }
 
 export async function generatePeriodsFromPlan(
@@ -92,12 +104,20 @@ export async function generatePeriodsFromPlan(
     });
   }
 
-  const anchor = startOfWeek(settings.periodFirstWeekStart, settings.weekStartDay);
+  const planAnchor = startOfWeek(settings.periodFirstWeekStart, settings.weekStartDay);
+  const existingCount = await prisma.schedulingPeriod.count({
+    where: { status: { in: BLOCKING_STATUSES } },
+  });
   const created: { id: string; name: string; start_date: string; end_date: string }[] = [];
   const skipped: string[] = [];
 
-  for (let i = 0; i < settings.periodsToSchedule; i++) {
-    const periodStart = addDays(anchor, i * settings.periodWeekCount * 7);
+  let slot = 0;
+  let createdThisRun = 0;
+  const maxSlots = Math.max(settings.periodsToSchedule * 4, 24);
+
+  while (createdThisRun < settings.periodsToSchedule && slot < maxSlots) {
+    const periodStart = addDays(planAnchor, slot * settings.periodWeekCount * 7);
+    slot += 1;
     const weeks = computePeriodWeeksExact(
       periodStart,
       settings.periodWeekCount,
@@ -107,23 +127,20 @@ export async function generatePeriodsFromPlan(
     const startStr = toDateString(periodStart);
     const endStr = toDateString(endDate);
 
-    const overlap = await prisma.schedulingPeriod.findFirst({
-      where: {
-        startDate: { lte: endDate },
-        endDate: { gte: periodStart },
-      },
-    });
+    const overlap = await findOverlappingPeriod(periodStart, endDate);
     if (overlap) {
-      skipped.push(`${startStr} – ${endStr} (overlaps ${overlap.name})`);
+      skipped.push(
+        `${startStr} – ${endStr} (overlaps "${overlap.name}" [${formatBlockingStatus(overlap.status)}] — change week start day/first start, delete unstarted periods, or use Replace unstarted)`,
+      );
       continue;
     }
 
-    const openingAt = openingAtForPeriod(periodStart, settings.openLeadDays);
+    const periodNumber = existingCount + createdThisRun + 1;
     const period = await createPeriod({
-      name: `Period ${i + 1} (${startStr})`,
+      name: `Period ${periodNumber} (${startStr})`,
       start_date: startStr,
       end_date: endStr,
-      opening_at: openingAt.toISOString(),
+      opening_at: new Date().toISOString(),
       created_by_user_id: createdByUserId,
     });
     created.push({
@@ -132,6 +149,13 @@ export async function generatePeriodsFromPlan(
       start_date: period.start_date,
       end_date: period.end_date,
     });
+    createdThisRun += 1;
+  }
+
+  if (createdThisRun < settings.periodsToSchedule) {
+    skipped.push(
+      `Only ${createdThisRun} of ${settings.periodsToSchedule} periods could be placed on the plan grid without overlapping existing periods.`,
+    );
   }
 
   return { created, skipped };
@@ -148,4 +172,41 @@ export async function deletePeriod(periodId: string) {
     );
   }
   await prisma.schedulingPeriod.delete({ where: { id: periodId } });
+}
+
+/** Clear picks/assignments and return period to open (for testing or restarting a cycle). */
+export async function resetPeriod(periodId: string) {
+  const period = await prisma.schedulingPeriod.findUnique({ where: { id: periodId } });
+  if (!period) throw new AppError(404, "not_found", "Period not found");
+  if (period.status === "scheduled" || period.status === "archived") {
+    throw new AppError(
+      422,
+      "invalid_state",
+      "Only open, draft, assignment, or published periods can be reset",
+    );
+  }
+
+  await prisma.$transaction([
+    prisma.assignment.deleteMany({ where: { schedulingPeriodId: periodId } }),
+    prisma.draftTurn.deleteMany({ where: { schedulingPeriodId: periodId } }),
+    prisma.occupancyIndicator.deleteMany({
+      where: {
+        startDate: { lte: period.endDate },
+        endDate: { gte: period.startDate },
+      },
+    }),
+    prisma.schedulingPeriod.update({
+      where: { id: periodId },
+      data: {
+        status: "open",
+        draftStartedAt: null,
+        publishedAt: null,
+        consecutiveAutoSkips: 0,
+        draftOnHold: false,
+        currentRound: 1,
+      },
+    }),
+  ]);
+
+  return { ok: true, status: "open" as const };
 }

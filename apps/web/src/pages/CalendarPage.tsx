@@ -1,16 +1,18 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { calendarPathForPeriod } from "../lib/period-navigation";
 import type { CalendarResponse, CalendarWeek } from "../lib/calendar-types";
 import { formatPeriodStatus, monthRange, notesForDay, occupancyForDay } from "../lib/calendar-utils";
 import { useAuth } from "../context/AuthContext";
+import { CalendarLegend } from "../components/CalendarLegend";
 import { MonthCalendar } from "../components/MonthCalendar";
 import { PeriodStatusBanner } from "../components/PeriodStatusBanner";
 import { DayDetailDrawer } from "../components/DayDetailDrawer";
 import { CalendarActionsBar } from "../components/CalendarActionsBar";
 import { OccupancyDisclaimer } from "../components/OccupancyDisclaimer";
 import { DraftPanel } from "../components/DraftPanel";
+import { AssignmentPanel } from "../components/AssignmentPanel";
 
 export function CalendarPage() {
   const { user } = useAuth();
@@ -30,6 +32,7 @@ export function CalendarPage() {
     dateLabel: string;
     week: CalendarWeek | null;
   } | null>(null);
+  const [draftRefresh, setDraftRefresh] = useState(0);
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -44,6 +47,11 @@ export function CalendarPage() {
       setLoading(false);
     }
   }, [year, month]);
+
+  const refreshAll = useCallback(() => {
+    void load();
+    setDraftRefresh((n) => n + 1);
+  }, [load]);
 
   useEffect(() => {
     if (paramYear && paramMonth != null) {
@@ -90,11 +98,22 @@ export function CalendarPage() {
     timeZone: "UTC",
   });
 
-  const weekStartDay = data?.settings.week_start_day ?? 0;
+  const schedulingWeekStartDay = data?.settings.week_start_day ?? 0;
   const weeks = data?.weeks ?? [];
   const notes = data?.notes ?? [];
   const occupancy = data?.occupancy ?? [];
   const range = monthRange(year, month);
+
+  const notesEarliestDate = data?.settings.notes_earliest_date ?? range.start;
+  const notesLatestDate = useMemo(() => {
+    const far = new Date();
+    far.setUTCFullYear(far.getUTCFullYear() + 5);
+    let latest = far.toISOString().slice(0, 10);
+    for (const p of data?.periods ?? []) {
+      if (p.end_date && p.end_date > latest) latest = p.end_date;
+    }
+    return latest;
+  }, [data?.periods]);
 
   const draftPeriods =
     data?.periods.filter((p) => p.status === "draft" || p.status === "assignment") ?? [];
@@ -163,6 +182,20 @@ export function CalendarPage() {
       {data &&
         user &&
         data.periods
+          .filter((p) => p.status === "assignment" || p.status === "published")
+          .map((p) => (
+            <AssignmentPanel
+              key={p.id}
+              period={p}
+              isCoordinator={user.isCoordinator || user.isAdmin}
+              onChanged={refreshAll}
+              refreshToken={draftRefresh}
+            />
+          ))}
+
+      {data &&
+        user &&
+        data.periods
           .filter((p) => p.status === "draft")
           .map((p) => (
             <DraftPanel
@@ -170,7 +203,8 @@ export function CalendarPage() {
               period={p}
               user={user}
               isCoordinator={user.isCoordinator || user.isAdmin}
-              onChanged={() => void load()}
+              onChanged={refreshAll}
+              refreshToken={draftRefresh}
             />
           ))}
 
@@ -180,13 +214,16 @@ export function CalendarPage() {
         </p>
       )}
 
+      {!loading && weeks.length > 0 && (
+        <CalendarLegend schedulingWeekStartDay={schedulingWeekStartDay} />
+      )}
+
       {loading ? (
         <p className="text-slate-500">Loading calendar…</p>
       ) : (
         <MonthCalendar
           year={year}
           month={month}
-          weekStartDay={weekStartDay}
           weeks={weeks}
           notes={notes}
           occupancy={occupancy}
@@ -207,10 +244,12 @@ export function CalendarPage() {
         <CalendarActionsBar
           householdId={user.householdId}
           selectedDate={selected?.date ?? null}
-          monthStart={range.start}
-          monthEnd={range.end}
-          onNoteSaved={() => void load()}
-          onOccupancySaved={() => void load()}
+          visibleMonthStart={range.start}
+          visibleMonthEnd={range.end}
+          earliestDate={notesEarliestDate}
+          latestDate={notesLatestDate}
+          onNoteSaved={refreshAll}
+          onOccupancySaved={refreshAll}
         />
       )}
 
@@ -222,8 +261,10 @@ export function CalendarPage() {
           notes={drawerNotes}
           occupancy={drawerOccupancy}
           user={user}
+          isCoordinator={user.isCoordinator || user.isAdmin}
           onClose={() => setSelected(null)}
-          onChanged={() => void load()}
+          onChanged={refreshAll}
+          draftRefreshToken={draftRefresh}
         />
       )}
     </div>

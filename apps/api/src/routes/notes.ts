@@ -79,6 +79,16 @@ async function notesRoutes(app: FastifyInstance) {
     if (parsed.data.start_date > parsed.data.end_date) {
       throw new AppError(400, "validation_error", "start_date must be on or before end_date");
     }
+    const settings = await prisma.systemSettings.findUniqueOrThrow({ where: { id: 1 } });
+    const cutoff = retentionCutoffDate(settings.historyRetentionYears);
+    const cutoffStr = toDateString(cutoff);
+    if (parsed.data.start_date < cutoffStr) {
+      throw new AppError(
+        400,
+        "date_out_of_range",
+        `Notes cannot start before ${cutoffStr} (history retention).`,
+      );
+    }
     const note = await prisma.calendarNote.create({
       data: {
         householdId,

@@ -76,6 +76,10 @@ docker/       Entrypoint (migrate, seed, start)
 - [x] **Phase 0:** Auth, admin, health, Docker scaffold
 - [x] **Phase 1:** `GET /api/v1/calendar`, month grid, period banner, week detail drawer
 - [x] **Phase 2:** Household notes and green/red occupancy (CRUD, calendar display, retention filter)
-- [x] **Phase 3:** Period CRUD, priority order, round-based draft (pick/skip/timeouts/hold), coordinator resume/force-skip, minute scheduler, draft UI on calendar + `/periods`
+- [x] **Phase 3:** Period CRUD, priority order, round-based draft (pick/skip/timeouts/hold), coordinator resume/force-skip, minute scheduler, draft UI on calendar + `/periods`, period plan bulk generate
+- [x] **Phase 4:** Manual assignment on calendar, publish, post-publish reassign with audit
+- [x] **Phase 5:** Notification inbox, critical event emails, rate limits, coordinator runbook, unit tests
+
+Coordinator runbook: [docs/coordinator-runbook.md](./docs/coordinator-runbook.md)
 
 Re-seed to load demo data: `pnpm db:seed`

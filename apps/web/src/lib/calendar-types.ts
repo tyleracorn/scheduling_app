@@ -53,7 +53,11 @@ export type OccupancyIndicator = {
 
 export type CalendarResponse = {
   range: { start: string; end: string };
-  settings: { cabin_timezone: string; week_start_day: number };
+  settings: {
+    cabin_timezone: string;
+    week_start_day: number;
+    notes_earliest_date: string;
+  };
   periods: CalendarPeriod[];
   weeks: CalendarWeek[];
   notes: CalendarNote[];

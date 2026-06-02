@@ -15,16 +15,26 @@ import {
   coordinatorForceSkip,
   coordinatorPickFor,
   changePick,
+  confirmPick,
   getDraftState,
   pickWeek,
   resumeDraft,
+  reviseCompletedPick,
   skipTurn,
   startDraft,
 } from "../services/draft.js";
 import {
+  assignWeek,
+  getAssignedWeeks,
+  getUnassignedWeeks,
+  publishPeriod,
+  swapWeeks,
+} from "../services/assignments.js";
+import {
   deletePeriod,
   generatePeriodsFromPlan,
   getPeriodPlan,
+  resetPeriod,
   savePeriodPlan,
 } from "../services/period-plan.js";
 
@@ -49,6 +59,16 @@ const prioritiesSchema = z.object({
 const pickSchema = z.object({
   period_week_id: z.string().uuid(),
   client_action_id: z.string().optional(),
+  occupancy_status: z.enum(["green", "red"]).optional(),
+});
+
+const confirmPickSchema = z.object({
+  occupancy_status: z.enum(["green", "red"]).optional(),
+});
+
+const revisePickSchema = z.object({
+  period_week_id: z.string().uuid().nullable(),
+  occupancy_status: z.enum(["green", "red"]).optional(),
 });
 
 const resumeSchema = z.object({
@@ -58,7 +78,6 @@ const resumeSchema = z.object({
 const planSchema = z.object({
   first_week_start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   weeks_per_period: z.number().int().min(1).max(52),
-  open_lead_days: z.number().int().min(0).max(365),
   rounds_per_household: z.number().int().min(1).max(10),
   periods_to_schedule: z.number().int().min(1).max(12),
   week_start_day: z.number().int().min(0).max(6),
@@ -66,6 +85,20 @@ const planSchema = z.object({
 
 const generateSchema = z.object({
   replace_unstarted: z.boolean().optional(),
+});
+
+const assignSchema = z.object({
+  household_id: z.string().uuid(),
+  reason: z.string().min(1).max(500).optional(),
+  occupancy_status: z.enum(["green", "red"]).nullable().optional(),
+});
+
+const swapWeeksSchema = z.object({
+  week_a_id: z.string().uuid(),
+  week_b_id: z.string().uuid(),
+  occupancy_a: z.enum(["green", "red"]).nullable().optional(),
+  occupancy_b: z.enum(["green", "red"]).nullable().optional(),
+  reason: z.string().min(1).max(500).optional(),
 });
 
 async function periodsRoutes(app: FastifyInstance) {
@@ -149,6 +182,12 @@ async function periodsRoutes(app: FastifyInstance) {
     return { ok: true };
   });
 
+  app.post("/api/v1/periods/:id/reset", async (request) => {
+    requireCoordinator(request);
+    const { id } = request.params as { id: string };
+    return await resetPeriod(id);
+  });
+
   app.put("/api/v1/periods/:id/priorities", async (request) => {
     requireCoordinator(request);
     const { id } = request.params as { id: string };
@@ -220,6 +259,97 @@ async function periodsRoutes(app: FastifyInstance) {
     return { draft };
   });
 
+  app.post("/api/v1/periods/:periodId/turns/:turnId/revise-pick", async (request) => {
+    const user = requireAuth(request);
+    const isCoordinator = user.isCoordinator || user.isAdmin;
+    if (!isCoordinator && !user.householdId) {
+      throw new AppError(403, "forbidden", "You must belong to a household");
+    }
+    const { turnId } = request.params as { periodId: string; turnId: string };
+    const parsed = revisePickSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      throw new AppError(400, "validation_error", "period_week_id required (use null to release)");
+    }
+    const draft = await reviseCompletedPick(
+      turnId,
+      user.id,
+      user.householdId,
+      isCoordinator,
+      parsed.data.period_week_id,
+      parsed.data.occupancy_status,
+    );
+    return { draft };
+  });
+
+  app.post("/api/v1/periods/:periodId/turns/:turnId/confirm-pick", async (request) => {
+    const user = requireAuth(request);
+    if (!user.householdId) {
+      throw new AppError(403, "forbidden", "You must belong to a household");
+    }
+    const { turnId } = request.params as { periodId: string; turnId: string };
+    const parsed = confirmPickSchema.safeParse(request.body ?? {});
+    const draft = await confirmPick(
+      turnId,
+      user.id,
+      user.householdId,
+      parsed.data?.occupancy_status,
+    );
+    return { draft };
+  });
+
+  app.get("/api/v1/periods/:id/assignments/assigned", async (request) => {
+    requireCoordinator(request);
+    const { id } = request.params as { id: string };
+    return await getAssignedWeeks(id);
+  });
+
+  app.get("/api/v1/periods/:id/assignments/unassigned", async (request) => {
+    requireCoordinator(request);
+    const { id } = request.params as { id: string };
+    return await getUnassignedWeeks(id);
+  });
+
+  app.put("/api/v1/periods/:periodId/assignments/:weekId", async (request) => {
+    const user = requireCoordinator(request);
+    const { periodId, weekId } = request.params as { periodId: string; weekId: string };
+    const parsed = assignSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new AppError(400, "validation_error", "Invalid assignment", parsed.error.flatten());
+    }
+    return await assignWeek(
+      periodId,
+      weekId,
+      parsed.data.household_id,
+      user.id,
+      parsed.data.reason,
+      parsed.data.occupancy_status,
+    );
+  });
+
+  app.post("/api/v1/periods/:periodId/assignments/swap", async (request) => {
+    const user = requireCoordinator(request);
+    const { periodId } = request.params as { periodId: string };
+    const parsed = swapWeeksSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new AppError(400, "validation_error", "Invalid swap request", parsed.error.flatten());
+    }
+    return await swapWeeks(
+      periodId,
+      parsed.data.week_a_id,
+      parsed.data.week_b_id,
+      user.id,
+      parsed.data.occupancy_a,
+      parsed.data.occupancy_b,
+      parsed.data.reason,
+    );
+  });
+
+  app.post("/api/v1/periods/:id/publish", async (request) => {
+    const user = requireCoordinator(request);
+    const { id } = request.params as { id: string };
+    return await publishPeriod(id, user.id);
+  });
+
   app.post("/api/v1/periods/:periodId/turns/:turnId/force-skip", async (request) => {
     const user = requireCoordinator(request);
     const { turnId } = request.params as { periodId: string; turnId: string };
@@ -234,7 +364,12 @@ async function periodsRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       throw new AppError(400, "validation_error", "period_week_id required");
     }
-    const draft = await coordinatorPickFor(turnId, parsed.data.period_week_id, user.id);
+    const draft = await coordinatorPickFor(
+      turnId,
+      parsed.data.period_week_id,
+      user.id,
+      parsed.data.occupancy_status,
+    );
     return { draft };
   });
 }

@@ -1,4 +1,5 @@
 import { Link, Outlet, useNavigate } from "react-router-dom";
+import { NotificationBell } from "./NotificationBell";
 import { useAuth } from "../context/AuthContext";
 
 export function Layout() {
@@ -33,6 +34,7 @@ export function Layout() {
                 Admin
               </Link>
             )}
+            {user && <NotificationBell />}
             {user && (
               <span className="text-slate-500">
                 {user.displayName}

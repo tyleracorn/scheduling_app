@@ -6,41 +6,60 @@ import { getAutoOccupancyStatus, type OccupancyStatus } from "../lib/preferences
 type Props = {
   householdId: string | null;
   selectedDate: string | null;
-  monthStart: string;
-  monthEnd: string;
+  visibleMonthStart: string;
+  visibleMonthEnd: string;
+  earliestDate: string;
+  latestDate: string;
   onNoteSaved: () => void;
   onOccupancySaved: () => void;
 };
 
+function defaultRangeDate(
+  selectedDate: string | null,
+  monthStart: string,
+  monthEnd: string,
+): string {
+  if (selectedDate) return selectedDate;
+  const today = new Date().toISOString().slice(0, 10);
+  if (today >= monthStart && today <= monthEnd) return today;
+  return monthStart;
+}
+
 export function CalendarActionsBar({
   householdId,
   selectedDate,
-  monthStart,
-  monthEnd,
+  visibleMonthStart,
+  visibleMonthEnd,
+  earliestDate,
+  latestDate,
   onNoteSaved,
   onOccupancySaved,
 }: Props) {
-  const today = new Date().toISOString().slice(0, 10);
-  const initialStart = selectedDate ?? today;
-
-  const [startDate, setStartDate] = useState(initialStart);
-  const [endDate, setEndDate] = useState(initialStart);
+  const [startDate, setStartDate] = useState(() =>
+    defaultRangeDate(selectedDate, visibleMonthStart, visibleMonthEnd),
+  );
+  const [endDate, setEndDate] = useState(() =>
+    defaultRangeDate(selectedDate, visibleMonthStart, visibleMonthEnd),
+  );
   const [noteBody, setNoteBody] = useState("");
-  const [occStart, setOccStart] = useState(initialStart);
-  const [occEnd, setOccEnd] = useState(initialStart);
+  const [occStart, setOccStart] = useState(() =>
+    defaultRangeDate(selectedDate, visibleMonthStart, visibleMonthEnd),
+  );
+  const [occEnd, setOccEnd] = useState(() =>
+    defaultRangeDate(selectedDate, visibleMonthStart, visibleMonthEnd),
+  );
   const [occStatus, setOccStatus] = useState<OccupancyStatus | null>(null);
   const [showOccForm, setShowOccForm] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
   useEffect(() => {
-    if (selectedDate) {
-      setStartDate(selectedDate);
-      setEndDate(selectedDate);
-      setOccStart(selectedDate);
-      setOccEnd(selectedDate);
-    }
-  }, [selectedDate]);
+    const next = defaultRangeDate(selectedDate, visibleMonthStart, visibleMonthEnd);
+    setStartDate(next);
+    setEndDate(selectedDate ?? next);
+    setOccStart(next);
+    setOccEnd(selectedDate ?? next);
+  }, [selectedDate, visibleMonthStart, visibleMonthEnd]);
 
   function openOccupancyForm() {
     setOccStatus(getAutoOccupancyStatus());
@@ -53,6 +72,10 @@ export function CalendarActionsBar({
     if (!householdId || !noteBody.trim()) return;
     if (startDate > endDate) {
       setError("End date must be on or after start date.");
+      return;
+    }
+    if (startDate < earliestDate) {
+      setError(`Notes cannot start before ${earliestDate} (history retention).`);
       return;
     }
     setBusy(true);
@@ -77,6 +100,10 @@ export function CalendarActionsBar({
     if (!householdId || !occStatus) return;
     if (occStart > occEnd) {
       setError("End date must be on or after start date.");
+      return;
+    }
+    if (occStart < earliestDate) {
+      setError(`Occupancy cannot start before ${earliestDate} (history retention).`);
       return;
     }
     setBusy(true);
@@ -110,7 +137,8 @@ export function CalendarActionsBar({
       <div className="border-b border-slate-100 bg-slate-50 px-4 py-2">
         <h2 className="text-sm font-medium text-slate-800">Add to calendar</h2>
         <p className="text-xs text-slate-500 mt-0.5">
-          Choose a date range — notes and occupancy apply to every day from start through end.
+          Pick any date range across scheduling periods (not limited to the month on screen). Click a
+          day on the calendar to pre-fill dates.
         </p>
       </div>
 
@@ -126,8 +154,8 @@ export function CalendarActionsBar({
                 type="date"
                 required
                 value={startDate}
-                min={monthStart}
-                max={monthEnd}
+                min={earliestDate}
+                max={latestDate}
                 onChange={(e) => {
                   setStartDate(e.target.value);
                   if (e.target.value > endDate) setEndDate(e.target.value);
@@ -141,8 +169,8 @@ export function CalendarActionsBar({
                 type="date"
                 required
                 value={endDate}
-                min={startDate}
-                max={monthEnd}
+                min={startDate < earliestDate ? earliestDate : startDate}
+                max={latestDate}
                 onChange={(e) => setEndDate(e.target.value)}
                 className="mt-1 block rounded border border-slate-300 px-2 py-1.5 text-sm w-full min-w-[10rem]"
               />
@@ -189,8 +217,8 @@ export function CalendarActionsBar({
                     type="date"
                     required
                     value={occStart}
-                    min={monthStart}
-                    max={monthEnd}
+                    min={earliestDate}
+                    max={latestDate}
                     onChange={(e) => {
                       setOccStart(e.target.value);
                       if (e.target.value > occEnd) setOccEnd(e.target.value);
@@ -204,8 +232,8 @@ export function CalendarActionsBar({
                     type="date"
                     required
                     value={occEnd}
-                    min={occStart}
-                    max={monthEnd}
+                    min={occStart < earliestDate ? earliestDate : occStart}
+                    max={latestDate}
                     onChange={(e) => setOccEnd(e.target.value)}
                     className="mt-1 block rounded border border-slate-300 px-2 py-1.5 text-sm w-full min-w-[10rem]"
                   />

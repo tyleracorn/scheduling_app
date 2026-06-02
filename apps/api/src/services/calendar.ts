@@ -88,6 +88,7 @@ export async function getCalendarAggregate(query: CalendarQuery) {
     settings: {
       cabin_timezone: settings.cabinTimezone,
       week_start_day: settings.weekStartDay,
+      notes_earliest_date: toDateString(retentionCutoff),
     },
     periods: periods.map((p) => formatPeriodSummary(p, activeTurnByPeriod.get(p.id))),
     weeks: periodWeeks.map((pw) => formatWeek(pw)),
@@ -162,7 +163,7 @@ function formatWeekAssignment(
   >,
 ) {
   if (periodStatus === "draft" || periodStatus === "open" || periodStatus === "scheduled") {
-    if (a.source !== "draft_pick") return null;
+    if (a.source !== "draft_pick" && a.source !== "coordinator_manual") return null;
   }
   return {
     household_id: a.householdId,

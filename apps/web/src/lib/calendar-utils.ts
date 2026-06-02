@@ -9,10 +9,13 @@ export function monthRange(year: number, month: number) {
   };
 }
 
-export function buildMonthGrid(year: number, month: number, weekStartDay: number): (Date | null)[][] {
+/** Standard month grid: Sunday–Saturday columns (independent of scheduling week start). */
+export const CALENDAR_GRID_WEEK_START = 0;
+
+export function buildMonthGrid(year: number, month: number): (Date | null)[][] {
   const first = new Date(Date.UTC(year, month, 1));
   const last = new Date(Date.UTC(year, month + 1, 0));
-  const startPad = (first.getUTCDay() - weekStartDay + 7) % 7;
+  const startPad = (first.getUTCDay() - CALENDAR_GRID_WEEK_START + 7) % 7;
   const days: (Date | null)[] = [];
   for (let i = 0; i < startPad; i++) days.push(null);
   for (let d = 1; d <= last.getUTCDate(); d++) {
@@ -28,8 +31,31 @@ export function buildMonthGrid(year: number, month: number, weekStartDay: number
 
 const WEEKDAY_LABELS = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 
-export function weekdayHeaders(weekStartDay: number): string[] {
-  return Array.from({ length: 7 }, (_, i) => WEEKDAY_LABELS[(weekStartDay + i) % 7]);
+export function weekdayHeaders(): string[] {
+  return [...WEEKDAY_LABELS];
+}
+
+export function weekdayName(dayIndex: number): string {
+  return WEEKDAY_LABELS[dayIndex] ?? "Sun";
+}
+
+export type SchedulingWeekBoundary = {
+  week: CalendarWeek;
+  kind: "start" | "end";
+};
+
+/** Mark scheduling-period week boundaries (from settings week start), not calendar columns. */
+export function schedulingWeekBoundariesForDay(
+  date: Date,
+  weeks: CalendarWeek[],
+): SchedulingWeekBoundary[] {
+  const key = dateKey(date);
+  const boundaries: SchedulingWeekBoundary[] = [];
+  for (const week of weeks) {
+    if (week.week_start_date === key) boundaries.push({ week, kind: "start" });
+    if (week.week_end_date === key) boundaries.push({ week, kind: "end" });
+  }
+  return boundaries;
 }
 
 const ACTIVE_PERIOD_STATUSES = new Set(["draft", "open", "assignment", "scheduled"]);
@@ -55,12 +81,29 @@ export function assignmentForDay(
   date: Date,
   weeks: CalendarWeek[],
 ): { week: CalendarWeek; assignment: NonNullable<CalendarWeek["assignment"]> } | null {
-  for (const week of prioritizeWeeksForDay(date, weeksCoveringDay(date, weeks))) {
+  const all = assignmentsForDay(date, weeks);
+  return all[0] ?? null;
+}
+
+/** All week assignments covering a day (e.g. both households on a handoff day). */
+export function assignmentsForDay(
+  date: Date,
+  weeks: CalendarWeek[],
+): { week: CalendarWeek; assignment: NonNullable<CalendarWeek["assignment"]> }[] {
+  const covering = prioritizeWeeksForDay(date, weeksCoveringDay(date, weeks));
+  const out: { week: CalendarWeek; assignment: NonNullable<CalendarWeek["assignment"]> }[] = [];
+  for (const week of covering) {
     if (week.assignment) {
-      return { week, assignment: week.assignment };
+      out.push({ week, assignment: week.assignment });
     }
   }
-  return null;
+  return out;
+}
+
+export function householdInitial(name: string): string {
+  const trimmed = name.trim();
+  if (!trimmed) return "?";
+  return trimmed.charAt(0).toUpperCase();
 }
 
 export function weekForDay(date: Date, weeks: CalendarWeek[]): CalendarWeek | null {

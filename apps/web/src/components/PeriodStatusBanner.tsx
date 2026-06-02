@@ -17,6 +17,11 @@ export function PeriodStatusBanner({ periods }: { periods: CalendarPeriod[] }) {
           <span className="font-medium">{p.name}</span>
           <span className="mx-2 text-amber-700">·</span>
           <span>{formatPeriodStatus(p.status)}</span>
+          {p.status === "assignment" && (
+            <span className="block mt-1 text-amber-800">
+              Assignment phase — click unassigned weeks on the calendar to assign, then publish.
+            </span>
+          )}
           {p.status === "draft" && p.draft_summary?.active_turn && (
             <span className="block mt-1 text-amber-800">
               {p.draft_summary.on_hold

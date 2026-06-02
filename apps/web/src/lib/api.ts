@@ -1,6 +1,22 @@
 import type { CalendarNote, CalendarResponse, OccupancyIndicator } from "./calendar-types";
 import type { DraftState, Period, PeriodPlan } from "./period-types";
 
+export type SystemSettings = {
+  week_selections_per_household: number;
+  pick_window_days: number;
+  pick_warning_lead_days: number;
+  history_retention_years: number;
+};
+
+export type NotificationItem = {
+  id: string;
+  type: string;
+  title: string;
+  body: string;
+  payload: Record<string, unknown>;
+  read_at: string | null;
+  created_at: string;
+};
 export type AuthUser = {
   id: string;
   email: string;
@@ -60,6 +76,10 @@ export const api = {
     }),
   households: () =>
     request<{ households: { id: string; name: string; color: string; active: boolean }[] }>(
+      "/api/v1/households",
+    ),
+  adminHouseholds: () =>
+    request<{ households: { id: string; name: string; color: string; active: boolean }[] }>(
       "/api/v1/admin/households",
     ),
   inviteUser: (email: string, household_id: string) =>
@@ -85,6 +105,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  setDayOccupancy: (date: string, status: "green" | "red" | null) =>
+    request<{ ok: boolean }>("/api/v1/occupancy/day", {
+      method: "PUT",
+      body: JSON.stringify({ date, status }),
+    }),
   updateOccupancy: (
     id: string,
     data: { start_date: string; end_date: string; status: "green" | "red" },
@@ -99,7 +124,6 @@ export const api = {
   savePeriodPlan: (plan: {
     first_week_start: string;
     weeks_per_period: number;
-    open_lead_days: number;
     rounds_per_household: number;
     periods_to_schedule: number;
     week_start_day: number;
@@ -118,6 +142,11 @@ export const api = {
     }),
   deletePeriod: (id: string) =>
     request<{ ok: boolean }>(`/api/v1/periods/${id}`, { method: "DELETE" }),
+  resetPeriod: (id: string) =>
+    request<{ ok: boolean; status: string }>(`/api/v1/periods/${id}/reset`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
   periods: (params?: { status?: string; year?: number }) => {
     const q = new URLSearchParams();
     if (params?.status) q.set("status", params.status);
@@ -172,9 +201,117 @@ export const api = {
       `/api/v1/periods/${periodId}/turns/${turnId}/force-skip`,
       { method: "POST", body: JSON.stringify({}) },
     ),
-  coordinatorPick: (periodId: string, turnId: string, period_week_id: string) =>
+  changePick: (periodId: string, turnId: string, period_week_id: string) =>
+    request<{ draft: DraftState }>(`/api/v1/periods/${periodId}/turns/${turnId}/change-pick`, {
+      method: "POST",
+      body: JSON.stringify({ period_week_id }),
+    }),
+  confirmPick: (periodId: string, turnId: string, occupancy_status?: "green" | "red") =>
+    request<{ draft: DraftState }>(`/api/v1/periods/${periodId}/turns/${turnId}/confirm-pick`, {
+      method: "POST",
+      body: JSON.stringify(occupancy_status ? { occupancy_status } : {}),
+    }),
+  revisePick: (
+    periodId: string,
+    turnId: string,
+    period_week_id: string | null,
+    occupancy_status?: "green" | "red" | null,
+  ) =>
+    request<{ draft: DraftState }>(`/api/v1/periods/${periodId}/turns/${turnId}/revise-pick`, {
+      method: "POST",
+      body: JSON.stringify({
+        period_week_id,
+        ...(occupancy_status !== undefined ? { occupancy_status } : {}),
+      }),
+    }),
+  unassignedWeeks: (periodId: string) =>
+    request<{
+      period_id: string;
+      period_name: string;
+      status: string;
+      weeks: { period_week_id: string; week_start_date: string; week_end_date: string }[];
+    }>(`/api/v1/periods/${periodId}/assignments/unassigned`),
+  assignWeek: (
+    periodId: string,
+    weekId: string,
+    household_id: string,
+    reason?: string,
+    occupancy_status?: "green" | "red" | null,
+  ) =>
+    request<{ assignment: Record<string, unknown> }>(
+      `/api/v1/periods/${periodId}/assignments/${weekId}`,
+      {
+        method: "PUT",
+        body: JSON.stringify({
+          household_id,
+          ...(reason ? { reason } : {}),
+          ...(occupancy_status !== undefined ? { occupancy_status } : {}),
+        }),
+      },
+    ),
+  assignedWeeks: (periodId: string) =>
+    request<{
+      period_id: string;
+      period_name: string;
+      status: string;
+      weeks: {
+        period_week_id: string;
+        week_start_date: string;
+        week_end_date: string;
+        household_id: string;
+        household_name: string;
+      }[];
+    }>(`/api/v1/periods/${periodId}/assignments/assigned`),
+  swapWeeks: (
+    periodId: string,
+    data: {
+      week_a_id: string;
+      week_b_id: string;
+      occupancy_a?: "green" | "red" | null;
+      occupancy_b?: "green" | "red" | null;
+      reason?: string;
+    },
+  ) =>
+    request<{ ok: boolean }>(`/api/v1/periods/${periodId}/assignments/swap`, {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  publishPeriod: (periodId: string) =>
+    request<{ period: { id: string; name: string; status: string; published_at: string } }>(
+      `/api/v1/periods/${periodId}/publish`,
+      { method: "POST", body: JSON.stringify({}) },
+    ),
+  systemSettings: () => request<{ settings: SystemSettings }>("/api/v1/settings"),
+  updateSystemSettings: (settings: Partial<SystemSettings>) =>
+    request<{ settings: SystemSettings }>("/api/v1/settings", {
+      method: "PUT",
+      body: JSON.stringify(settings),
+    }),
+  notifications: (cursor?: string) => {
+    const qs = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
+    return request<{ notifications: NotificationItem[]; next_cursor: string | null }>(
+      `/api/v1/notifications${qs}`,
+    );
+  },
+  notificationUnreadCount: () => request<{ count: number }>("/api/v1/notifications/unread-count"),
+  markNotificationRead: (id: string) =>
+    request<{ ok: boolean }>(`/api/v1/notifications/${id}/read`, { method: "POST", body: JSON.stringify({}) }),
+  markAllNotificationsRead: () =>
+    request<{ ok: boolean }>("/api/v1/notifications/read-all", { method: "POST", body: JSON.stringify({}) }),
+  coordinatorPick: (
+    periodId: string,
+    turnId: string,
+    period_week_id: string,
+    occupancy_status?: "green" | "red",
+  ) =>
     request<{ draft: DraftState }>(
       `/api/v1/periods/${periodId}/turns/${turnId}/coordinator-pick`,
-      { method: "POST", body: JSON.stringify({ period_week_id }) },
+      {
+        method: "POST",
+        body: JSON.stringify({
+          period_week_id,
+          ...(occupancy_status ? { occupancy_status } : {}),
+        }),
+      },
     ),
 };

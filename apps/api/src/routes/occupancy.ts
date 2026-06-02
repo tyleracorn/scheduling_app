@@ -6,6 +6,12 @@ import { parseDateString, toDateString } from "../lib/dates.js";
 import { retentionCutoffDate } from "../lib/retention.js";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../plugins/auth.js";
+import { setHouseholdDayOccupancy } from "../services/occupancy-week.js";
+
+const dayOccupancySchema = z.object({
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  status: z.enum(["green", "red"]).nullable(),
+});
 
 const dateRangeSchema = z.object({
   start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -114,6 +120,27 @@ async function occupancyRoutes(app: FastifyInstance) {
       include: { household: true },
     });
     return { occupancy: formatOccupancy(row) };
+  });
+
+  app.put("/api/v1/occupancy/day", async (request) => {
+    const user = requireAuth(request);
+    const householdId = requireHouseholdId(user);
+    const parsed = dayOccupancySchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new AppError(400, "validation_error", "Invalid day occupancy", parsed.error.flatten());
+    }
+    const settings = await prisma.systemSettings.findUniqueOrThrow({ where: { id: 1 } });
+    const cutoff = retentionCutoffDate(settings.historyRetentionYears);
+    const cutoffStr = toDateString(cutoff);
+    if (parsed.data.date < cutoffStr) {
+      throw new AppError(
+        400,
+        "date_out_of_range",
+        `Occupancy cannot be set before ${cutoffStr} (history retention).`,
+      );
+    }
+    await setHouseholdDayOccupancy(householdId, parsed.data.date, parsed.data.status, user.id);
+    return { ok: true };
   });
 
   app.delete("/api/v1/occupancy/:id", async (request, reply) => {

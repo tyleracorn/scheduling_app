@@ -12,6 +12,15 @@ import {
 } from "../lib/session.js";
 import { config } from "../lib/config.js";
 import { sendEmail, inviteLink, resetPasswordLink } from "../services/email.js";
+import { checkRateLimit, rateLimitKey } from "../lib/rate-limit.js";
+
+function enforceRateLimit(request: { ip: string }, route: string) {
+  const ip = request.ip || "unknown";
+  const result = checkRateLimit(rateLimitKey(ip, route), 20, 15 * 60 * 1000);
+  if (!result.allowed) {
+    throw new AppError(429, "rate_limited", "Too many attempts. Try again later.");
+  }
+}
 
 const loginSchema = z.object({
   email: z.string().email(),
@@ -40,6 +49,7 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/v1/auth/login", async (request, reply) => {
+    enforceRateLimit(request, "login");
     const parsed = loginSchema.safeParse(request.body);
     if (!parsed.success) {
       throw new AppError(400, "validation_error", "Invalid login payload", parsed.error.flatten());
@@ -107,6 +117,7 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/v1/auth/forgot-password", async (request) => {
+    enforceRateLimit(request, "forgot-password");
     const parsed = forgotSchema.safeParse(request.body);
     if (!parsed.success) {
       throw new AppError(400, "validation_error", "Invalid email");

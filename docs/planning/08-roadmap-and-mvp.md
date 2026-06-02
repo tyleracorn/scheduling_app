@@ -96,7 +96,7 @@ gantt
 
 ---
 
-### Phase 1: Calendar read (2 weeks)
+### Phase 1: Calendar read (2 weeks) — **implemented**
 
 **Objective:** Primary screen delivers value before draft exists.
 
@@ -125,7 +125,9 @@ gantt
 
 ---
 
-### Phase 3: Periods and draft engine (3 weeks)
+### Phase 3: Periods and draft engine (3 weeks) — **implemented**
+
+**Note:** BullMQ from original plan replaced with in-process minute scheduler. Period plan bulk generation added per product feedback.
 
 **Objective:** Core scheduling differentiation.
 
@@ -143,7 +145,9 @@ gantt
 
 ---
 
-### Phase 4: Coordinator assignment and publish (1.5 weeks)
+### Phase 4: Coordinator assignment and publish (1.5 weeks) — **implemented**
+
+**Note:** Assignment and publish UI is calendar-first (day drawer + assignment panel), not a separate assignment page.
 
 **Objective:** Close the period lifecycle.
 
@@ -158,7 +162,9 @@ gantt
 
 ---
 
-### Phase 5: Notifications and polish (1.5 weeks)
+### Phase 5: Notifications and polish (1.5 weeks) — **implemented**
+
+**Note:** Pick-warning emails deferred; coordinator runbook at [docs/coordinator-runbook.md](../../coordinator-runbook.md).
 
 **Objective:** Production-ready comms and hardening.
 
