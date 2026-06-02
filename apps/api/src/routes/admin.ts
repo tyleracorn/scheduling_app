@@ -7,6 +7,11 @@ import { requireAdmin } from "../plugins/auth.js";
 import { sendEmail, inviteLink } from "../services/email.js";
 import { assertCoordinatorLimit } from "../services/coordinators.js";
 import {
+  ensureWorkerBeeHousehold,
+  formatHousehold,
+  syncHouseholdSlots,
+} from "../services/households.js";
+import {
   formatSystemSettingsForApi,
   pickWarningLeadHoursFromDays,
   pickWindowHoursFromDays,
@@ -16,6 +21,7 @@ const householdSchema = z.object({
   name: z.string().min(1).max(100),
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
   active: z.boolean().optional(),
+  is_worker_bee: z.boolean().optional(),
 });
 
 const inviteSchema = z.object({
@@ -35,6 +41,7 @@ const settingsSchema = z.object({
   pick_window_days: z.number().int().min(1).max(14).optional(),
   pick_warning_lead_days: z.number().int().min(0).max(7).optional(),
   history_retention_years: z.number().int().min(1).max(20).optional(),
+  household_slot_count: z.number().int().min(1).max(20).optional(),
 });
 
 export async function adminRoutes(app: FastifyInstance) {
@@ -45,8 +52,15 @@ export async function adminRoutes(app: FastifyInstance) {
   });
 
   app.get("/api/v1/admin/households", async () => {
+    await ensureWorkerBeeHousehold();
     const households = await prisma.household.findMany({ orderBy: { name: "asc" } });
-    return { households };
+    return { households: households.map(formatHousehold) };
+  });
+
+  app.post("/api/v1/admin/households/sync", async () => {
+    const settings = await prisma.systemSettings.findUniqueOrThrow({ where: { id: 1 } });
+    const households = await syncHouseholdSlots(settings.householdSlotCount);
+    return { households: households.map(formatHousehold) };
   });
 
   app.post("/api/v1/admin/households", async (request) => {
@@ -59,9 +73,16 @@ export async function adminRoutes(app: FastifyInstance) {
         name: parsed.data.name,
         color: parsed.data.color,
         active: parsed.data.active ?? true,
+        isWorkerBee: parsed.data.is_worker_bee ?? false,
       },
     });
-    return { household };
+    if (parsed.data.is_worker_bee) {
+      await prisma.household.updateMany({
+        where: { id: { not: household.id }, isWorkerBee: true },
+        data: { isWorkerBee: false },
+      });
+    }
+    return { household: formatHousehold(household) };
   });
 
   app.patch("/api/v1/admin/households/:id", async (request) => {
@@ -70,11 +91,23 @@ export async function adminRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       throw new AppError(400, "validation_error", "Invalid household", parsed.error.flatten());
     }
+    const data = parsed.data;
+    if (data.is_worker_bee) {
+      await prisma.household.updateMany({
+        where: { id: { not: id }, isWorkerBee: true },
+        data: { isWorkerBee: false },
+      });
+    }
     const household = await prisma.household.update({
       where: { id },
-      data: parsed.data,
+      data: {
+        name: data.name,
+        color: data.color,
+        active: data.active,
+        isWorkerBee: data.is_worker_bee,
+      },
     });
-    return { household };
+    return { household: formatHousehold(household) };
   });
 
   app.get("/api/v1/admin/users", async () => {
@@ -165,7 +198,12 @@ export async function adminRoutes(app: FastifyInstance) {
 
   app.get("/api/v1/admin/settings", async () => {
     const settings = await prisma.systemSettings.findUniqueOrThrow({ where: { id: 1 } });
-    return { settings: formatSystemSettingsForApi(settings) };
+    return {
+      settings: {
+        ...formatSystemSettingsForApi(settings),
+        household_slot_count: settings.householdSlotCount,
+      },
+    };
   });
 
   app.put("/api/v1/admin/settings", async (request) => {
@@ -189,9 +227,18 @@ export async function adminRoutes(app: FastifyInstance) {
             ? pickWarningLeadHoursFromDays(d.pick_warning_lead_days)
             : undefined,
         historyRetentionYears: d.history_retention_years,
+        householdSlotCount: d.household_slot_count,
         updatedByUserId: admin.id,
       },
     });
-    return { settings: formatSystemSettingsForApi(settings) };
+    if (d.household_slot_count !== undefined) {
+      await syncHouseholdSlots(d.household_slot_count);
+    }
+    return {
+      settings: {
+        ...formatSystemSettingsForApi(settings),
+        household_slot_count: settings.householdSlotCount,
+      },
+    };
   });
 }

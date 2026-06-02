@@ -268,6 +268,56 @@ export async function swapWeeks(
   return { ok: true };
 }
 
+export async function getPeriodAssignmentSummary(periodId: string) {
+  const period = await prisma.schedulingPeriod.findUnique({
+    where: { id: periodId },
+    include: {
+      weeks: { include: { assignment: { include: { household: true } } } },
+    },
+  });
+  if (!period) throw new AppError(404, "not_found", "Period not found");
+
+  const settings = await prisma.systemSettings.findUniqueOrThrow({ where: { id: 1 } });
+  const households = await prisma.household.findMany({
+    where: { active: true },
+    orderBy: [{ isWorkerBee: "asc" }, { name: "asc" }],
+  });
+
+  const counts = new Map<string, number>();
+  for (const week of period.weeks) {
+    if (week.assignment) {
+      counts.set(
+        week.assignment.householdId,
+        (counts.get(week.assignment.householdId) ?? 0) + 1,
+      );
+    }
+  }
+
+  const totalWeeks = period.weeks.length;
+  const assignedWeeks = period.weeks.filter((w) => w.assignment).length;
+  const owningCount = households.filter((h) => !h.isWorkerBee).length;
+  const evenSplit = owningCount > 0 ? totalWeeks / owningCount : null;
+
+  return {
+    period_id: periodId,
+    period_name: period.name,
+    status: period.status,
+    total_weeks: totalWeeks,
+    assigned_weeks: assignedWeeks,
+    unassigned_weeks: totalWeeks - assignedWeeks,
+    draft_picks_per_household: settings.weekSelectionsPerHousehold,
+    even_split_hint: evenSplit,
+    households: households.map((h) => ({
+      household_id: h.id,
+      household_name: h.name,
+      color: h.color,
+      is_worker_bee: h.isWorkerBee,
+      weeks_assigned: counts.get(h.id) ?? 0,
+      draft_pick_target: h.isWorkerBee ? null : settings.weekSelectionsPerHousehold,
+    })),
+  };
+}
+
 export async function publishPeriod(periodId: string, actorUserId: string) {
   const period = await prisma.schedulingPeriod.findUnique({
     where: { id: periodId },

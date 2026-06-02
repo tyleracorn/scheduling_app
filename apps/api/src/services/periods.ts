@@ -31,7 +31,7 @@ export async function materializePeriodWeeks(
 
 export async function setDefaultPriorities(periodId: string) {
   const households = await prisma.household.findMany({
-    where: { active: true },
+    where: { active: true, isWorkerBee: false },
     orderBy: { name: "asc" },
   });
   await prisma.periodHouseholdPriority.deleteMany({ where: { schedulingPeriodId: periodId } });

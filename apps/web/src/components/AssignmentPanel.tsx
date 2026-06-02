@@ -7,15 +7,26 @@ import {
   type OccupancyPick,
 } from "../lib/occupancy-choice";
 import { OccupancyChoice } from "./OccupancyChoice";
+import { PeriodHouseholdWeekCounts } from "./PeriodHouseholdWeekCounts";
+import type { PeriodAssignmentSummary } from "../lib/api";
 
 type Props = {
   period: CalendarPeriod;
   isCoordinator: boolean;
   onChanged: () => void;
   refreshToken?: number;
+  embedded?: boolean;
+  summaryOnly?: boolean;
 };
 
-export function AssignmentPanel({ period, isCoordinator, onChanged, refreshToken }: Props) {
+export function AssignmentPanel({
+  period,
+  isCoordinator,
+  onChanged,
+  refreshToken,
+  embedded = false,
+  summaryOnly = false,
+}: Props) {
   const [unassignedCount, setUnassignedCount] = useState<number | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -35,6 +46,20 @@ export function AssignmentPanel({ period, isCoordinator, onChanged, refreshToken
   const [swapOccA, setSwapOccA] = useState<OccupancyPick>(() => defaultOccupancyPick());
   const [swapOccB, setSwapOccB] = useState<OccupancyPick>(() => defaultOccupancyPick());
   const [swapReason, setSwapReason] = useState("");
+  const [summary, setSummary] = useState<PeriodAssignmentSummary | null>(null);
+
+  const loadSummary = useCallback(async () => {
+    if (period.status !== "assignment" && period.status !== "published" && period.status !== "draft") {
+      setSummary(null);
+      return;
+    }
+    try {
+      const res = await api.assignmentSummary(period.id);
+      setSummary(res);
+    } catch {
+      setSummary(null);
+    }
+  }, [period.id, period.status]);
 
   const load = useCallback(async () => {
     if (period.status !== "assignment") {
@@ -69,6 +94,10 @@ export function AssignmentPanel({ period, isCoordinator, onChanged, refreshToken
   useEffect(() => {
     void loadAssigned();
   }, [loadAssigned, refreshToken]);
+
+  useEffect(() => {
+    void loadSummary();
+  }, [loadSummary, refreshToken]);
 
   async function publish() {
     if (!confirm(`Publish ${period.name}? Everyone will see final assignments on the calendar.`)) {
@@ -121,13 +150,41 @@ export function AssignmentPanel({ period, isCoordinator, onChanged, refreshToken
   const weekAInfo = assignedWeeks.find((w) => w.period_week_id === weekA);
   const weekBInfo = assignedWeeks.find((w) => w.period_week_id === weekB);
 
-  if (period.status !== "assignment" && period.status !== "published") return null;
+  if (period.status !== "assignment" && period.status !== "published" && period.status !== "draft") {
+    return null;
+  }
+
+  const showPublish = period.status === "assignment";
+
+  if (period.status === "draft") {
+    if (!summary) return null;
+    return (
+      <div className={embedded ? "" : "mb-4 rounded-lg border border-slate-200 bg-slate-50 px-4 py-3"}>
+        <PeriodHouseholdWeekCounts summary={summary} compact />
+      </div>
+    );
+  }
+
+  if (summaryOnly) {
+    if (!summary) return null;
+    return <PeriodHouseholdWeekCounts summary={summary} compact />;
+  }
+
+  const panelClass = embedded
+    ? "text-sm text-emerald-950"
+    : "mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-950";
 
   return (
-    <div className="mb-4 rounded-lg border border-emerald-200 bg-emerald-50 px-4 py-4 text-sm text-emerald-950">
+    <div className={panelClass}>
       <h2 className="font-semibold text-base mb-2">
-        {period.status === "assignment" ? "Assignment" : "Published"} — {period.name}
+        {period.status === "assignment" ? "Assign remaining weeks" : "Schedule set"} — {period.name}
       </h2>
+
+      {summary && (
+        <div className="mb-3">
+          <PeriodHouseholdWeekCounts summary={summary} />
+        </div>
+      )}
 
       {period.status === "assignment" && (
         <>
@@ -251,7 +308,7 @@ export function AssignmentPanel({ period, isCoordinator, onChanged, refreshToken
         </div>
       )}
 
-      {period.status === "assignment" && isCoordinator && (
+      {showPublish && isCoordinator && (
         <button
           type="button"
           disabled={busy || unassignedCount === null || unassignedCount > 0}

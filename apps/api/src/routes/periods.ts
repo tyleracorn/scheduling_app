@@ -26,6 +26,7 @@ import {
 import {
   assignWeek,
   getAssignedWeeks,
+  getPeriodAssignmentSummary,
   getUnassignedWeeks,
   publishPeriod,
   swapWeeks,
@@ -295,6 +296,12 @@ async function periodsRoutes(app: FastifyInstance) {
       parsed.data?.occupancy_status,
     );
     return { draft };
+  });
+
+  app.get("/api/v1/periods/:id/assignments/summary", async (request) => {
+    requireAuth(request);
+    const { id } = request.params as { id: string };
+    return await getPeriodAssignmentSummary(id);
   });
 
   app.get("/api/v1/periods/:id/assignments/assigned", async (request) => {

@@ -94,7 +94,10 @@ export async function getDraftState(periodId: string) {
 
 async function getActiveHouseholdIds(periodId: string): Promise<string[]> {
   const rows = await prisma.periodHouseholdPriority.findMany({
-    where: { schedulingPeriodId: periodId, household: { active: true } },
+    where: {
+      schedulingPeriodId: periodId,
+      household: { active: true, isWorkerBee: false },
+    },
     orderBy: { position: "asc" },
   });
   return rows.map((r) => r.householdId);
@@ -127,7 +130,10 @@ export async function activateNextTurn(periodId: string): Promise<void> {
 
   while (round <= maxRounds) {
     const priorities = await prisma.periodHouseholdPriority.findMany({
-      where: { schedulingPeriodId: periodId, household: { active: true } },
+      where: {
+        schedulingPeriodId: periodId,
+        household: { active: true, isWorkerBee: false },
+      },
       orderBy: { position: "asc" },
       include: { household: true },
     });

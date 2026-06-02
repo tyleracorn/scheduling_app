@@ -26,6 +26,7 @@ async function main() {
       periodWeekCount: 14,
       openLeadDays: 30,
       periodsToSchedule: 4,
+      householdSlotCount: 5,
     },
     update: {},
   });
@@ -33,8 +34,20 @@ async function main() {
   for (const h of HOUSEHOLDS) {
     const existing = await prisma.household.findFirst({ where: { name: h.name } });
     if (!existing) {
-      await prisma.household.create({ data: h });
+      await prisma.household.create({ data: { ...h, isWorkerBee: false } });
     }
+  }
+
+  const workerBee = await prisma.household.findFirst({ where: { isWorkerBee: true } });
+  if (!workerBee) {
+    await prisma.household.create({
+      data: {
+        name: "Worker Bee",
+        color: "#64748B",
+        active: true,
+        isWorkerBee: true,
+      },
+    });
   }
 
   const email = (process.env.SEED_ADMIN_EMAIL ?? "admin@example.com").toLowerCase();

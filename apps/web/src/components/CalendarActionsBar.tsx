@@ -12,6 +12,7 @@ type Props = {
   latestDate: string;
   onNoteSaved: () => void;
   onOccupancySaved: () => void;
+  defaultCollapsed?: boolean;
 };
 
 function defaultRangeDate(
@@ -34,6 +35,7 @@ export function CalendarActionsBar({
   latestDate,
   onNoteSaved,
   onOccupancySaved,
+  defaultCollapsed = false,
 }: Props) {
   const [startDate, setStartDate] = useState(() =>
     defaultRangeDate(selectedDate, visibleMonthStart, visibleMonthEnd),
@@ -50,6 +52,7 @@ export function CalendarActionsBar({
   );
   const [occStatus, setOccStatus] = useState<OccupancyStatus | null>(null);
   const [showOccForm, setShowOccForm] = useState(false);
+  const [expanded, setExpanded] = useState(!defaultCollapsed);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
 
@@ -126,22 +129,31 @@ export function CalendarActionsBar({
 
   if (!householdId) {
     return (
-      <p className="mt-6 text-sm text-slate-500 rounded-lg border border-slate-200 bg-slate-50 p-4">
+      <p className="mt-4 text-sm text-slate-500 rounded-lg border border-slate-200 bg-slate-50 p-4">
         You need to belong to a household to add notes or occupancy indicators.
       </p>
     );
   }
 
   return (
-    <div className="mt-6 rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden">
-      <div className="border-b border-slate-100 bg-slate-50 px-4 py-2">
-        <h2 className="text-sm font-medium text-slate-800">Add to calendar</h2>
+    <div className="rounded-lg border border-slate-200 bg-white shadow-sm overflow-hidden">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className={`w-full px-4 py-3 text-left hover:bg-slate-100/80 ${expanded ? "border-b border-slate-100 bg-slate-50" : "bg-slate-50"}`}
+        aria-expanded={expanded}
+      >
+        <h2 className="text-sm font-medium text-slate-800">
+          Add note or sharing for multiple days
+        </h2>
         <p className="text-xs text-slate-500 mt-0.5">
-          Pick any date range across scheduling periods (not limited to the month on screen). Click a
-          day on the calendar to pre-fill dates.
+          {expanded
+            ? "Pick a date range across scheduling periods. Click a day on the calendar to pre-fill dates."
+            : "Expand to add a note or green/red sharing for a date range. For a single day, click the day on the calendar."}
         </p>
-      </div>
+      </button>
 
+      {expanded && (
       <div className="p-4 space-y-4">
         {error && <p className="text-sm text-red-600">{error}</p>}
 
@@ -292,6 +304,7 @@ export function CalendarActionsBar({
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }

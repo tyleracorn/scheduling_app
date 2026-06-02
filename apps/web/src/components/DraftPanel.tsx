@@ -16,6 +16,7 @@ type Props = {
   isCoordinator: boolean;
   onChanged: () => void;
   refreshToken?: number;
+  embedded?: boolean;
 };
 
 function findCompletedPick(draft: DraftState, householdId: string | null) {
@@ -31,7 +32,14 @@ function findCompletedPick(draft: DraftState, householdId: string | null) {
   );
 }
 
-export function DraftPanel({ period, user, isCoordinator, onChanged, refreshToken }: Props) {
+export function DraftPanel({
+  period,
+  user,
+  isCoordinator,
+  onChanged,
+  refreshToken,
+  embedded = false,
+}: Props) {
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -95,7 +103,11 @@ export function DraftPanel({ period, user, isCoordinator, onChanged, refreshToke
   }
 
   if (period.status !== "draft") return null;
-  if (loading) return <p className="text-sm text-slate-500">Loading draft…</p>;
+  if (loading) {
+    return (
+      <p className={`text-sm text-slate-500 ${embedded ? "pt-2" : ""}`}>Loading pick status…</p>
+    );
+  }
   if (!draft) return null;
 
   const turn = draft.active_turn;
@@ -119,14 +131,20 @@ export function DraftPanel({ period, user, isCoordinator, onChanged, refreshToke
       ]
     : [];
 
+  const panelClass = embedded
+    ? "text-sm text-indigo-950 pt-2 border-t border-slate-200"
+    : "mb-4 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-4 text-sm text-indigo-950";
+
   return (
-    <div className="mb-4 rounded-lg border border-indigo-200 bg-indigo-50 px-4 py-4 text-sm text-indigo-950">
-      <h2 className="font-semibold text-base mb-2">Draft — {draft.period_name}</h2>
-      <p className="mb-3 text-indigo-800">
-        Choose a week, then confirm your pick or skip. You can change your selection before confirming,
-        or revise a confirmed pick to another open week (or release it) while the draft is still
-        running.
-      </p>
+    <div className={panelClass}>
+      <h2 className="font-semibold text-base mb-2">Pick your weeks — {draft.period_name}</h2>
+      {!embedded && (
+        <p className="mb-3 text-indigo-800">
+          Choose a week, then confirm your pick or skip. You can change your selection before
+          confirming, or revise a confirmed pick to another open week (or release it) while picking is
+          still open.
+        </p>
+      )}
 
       {error && (
         <p className="mb-2 text-red-700" role="alert">

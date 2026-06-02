@@ -15,6 +15,7 @@ export async function householdsRoutes(app: FastifyInstance) {
         name: h.name,
         color: h.color,
         active: h.active,
+        is_worker_bee: h.isWorkerBee,
       })),
     };
   });

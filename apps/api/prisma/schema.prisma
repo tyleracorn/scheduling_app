@@ -42,12 +42,13 @@ enum OccupancyStatus {
 }
 
 model Household {
-  id        String   @id @default(uuid()) @db.Uuid
-  name      String   @db.VarChar(100)
-  color     String   @db.Char(7)
-  active    Boolean  @default(true)
-  createdAt DateTime @default(now()) @map("created_at")
-  updatedAt DateTime @updatedAt @map("updated_at")
+  id           String   @id @default(uuid()) @db.Uuid
+  name         String   @db.VarChar(100)
+  color        String   @db.Char(7)
+  active       Boolean  @default(true)
+  isWorkerBee  Boolean  @default(false) @map("is_worker_bee")
+  createdAt    DateTime @default(now()) @map("created_at")
+  updatedAt    DateTime @updatedAt @map("updated_at")
 
   memberships            HouseholdMembership[]
   notes                  CalendarNote[]
@@ -124,6 +125,7 @@ model SystemSettings {
   periodWeekCount             Int      @default(13) @map("period_week_count")
   openLeadDays                Int      @default(30) @map("open_lead_days")
   periodsToSchedule           Int      @default(4) @map("periods_to_schedule")
+  householdSlotCount          Int      @default(5) @map("household_slot_count")
   updatedAt                   DateTime @updatedAt @map("updated_at")
   updatedByUserId             String?  @map("updated_by_user_id") @db.Uuid
 

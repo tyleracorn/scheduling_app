@@ -11,10 +11,10 @@
     "typecheck": "tsc --noEmit",
     "test": "node --import tsx --test src/lib/*.test.ts",
     "db:generate": "prisma generate",
-    "db:migrate": "prisma migrate dev",
-    "db:migrate:deploy": "prisma migrate deploy",
-    "db:seed": "prisma db seed",
-    "db:studio": "prisma studio"
+    "db:migrate": "prisma migrate dev --env-file=../../.env",
+    "db:migrate:deploy": "prisma migrate deploy --env-file=../../.env",
+    "db:seed": "prisma db seed --env-file=../../.env",
+    "db:studio": "prisma studio --env-file=../../.env"
   },
   "prisma": {
     "seed": "tsx prisma/seed.ts"

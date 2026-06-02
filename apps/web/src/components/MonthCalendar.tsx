@@ -39,11 +39,12 @@ export function MonthCalendar({ year, month, weeks, notes, occupancy, onSelectDa
   });
 
   return (
-    <div className="bg-white rounded-lg border border-slate-200 overflow-hidden">
+    <div className="bg-white rounded-none sm:rounded-lg border-y sm:border border-slate-200 overflow-hidden">
       <div className="grid grid-cols-7 border-b border-slate-200 bg-slate-50">
         {headers.map((h) => (
-          <div key={h} className="py-2 text-center text-xs font-medium text-slate-600">
-            {h}
+          <div key={h} className="py-1.5 sm:py-2 text-center text-[10px] sm:text-xs font-medium text-slate-600">
+            <span className="sm:hidden">{h.charAt(0)}</span>
+            <span className="hidden sm:inline">{h}</span>
           </div>
         ))}
       </div>
@@ -51,7 +52,7 @@ export function MonthCalendar({ year, month, weeks, notes, occupancy, onSelectDa
         <div key={ri} className="grid grid-cols-7 border-b border-slate-100 last:border-b-0">
           {row.map((date, ci) => {
             if (!date) {
-              return <div key={ci} className="min-h-[92px] bg-slate-50/50" />;
+              return <div key={ci} className="min-h-[76px] sm:min-h-[92px] bg-slate-50/50" />;
             }
             const dayAssignments = assignmentsForDay(date, weeks);
             const week = weekForDay(date, weeks);
@@ -74,7 +75,7 @@ export function MonthCalendar({ year, month, weeks, notes, occupancy, onSelectDa
                 key={ci}
                 type="button"
                 onClick={() => onSelectDay(date, week)}
-                className={`min-h-[92px] p-1 text-left border-r border-slate-100 last:border-r-0 hover:bg-slate-50/80 transition-colors flex flex-col ${
+                className={`min-h-[76px] sm:min-h-[92px] p-0.5 sm:p-1 text-left border-r border-slate-100 last:border-r-0 hover:bg-slate-50/80 transition-colors flex flex-col ${
                   hasStart ? "border-l-[3px] border-l-indigo-500" : ""
                 } ${hasEnd ? "border-r-[3px] border-r-slate-400" : ""} ${
                   isHandoff ? "bg-violet-50/40" : ""

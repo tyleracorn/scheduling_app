@@ -8,6 +8,29 @@ export type SystemSettings = {
   history_retention_years: number;
 };
 
+export type AdminSettings = SystemSettings & {
+  household_slot_count: number;
+};
+
+export type PeriodAssignmentSummary = {
+  period_id: string;
+  period_name: string;
+  status: string;
+  total_weeks: number;
+  assigned_weeks: number;
+  unassigned_weeks: number;
+  draft_picks_per_household: number;
+  even_split_hint: number | null;
+  households: {
+    household_id: string;
+    household_name: string;
+    color: string;
+    is_worker_bee: boolean;
+    weeks_assigned: number;
+    draft_pick_target: number | null;
+  }[];
+};
+
 export type NotificationItem = {
   id: string;
   type: string;
@@ -75,12 +98,43 @@ export const api = {
       body: JSON.stringify({ token, password }),
     }),
   households: () =>
-    request<{ households: { id: string; name: string; color: string; active: boolean }[] }>(
-      "/api/v1/households",
-    ),
+    request<{
+      households: {
+        id: string;
+        name: string;
+        color: string;
+        active: boolean;
+        is_worker_bee: boolean;
+      }[];
+    }>("/api/v1/households"),
   adminHouseholds: () =>
-    request<{ households: { id: string; name: string; color: string; active: boolean }[] }>(
-      "/api/v1/admin/households",
+    request<{
+      households: {
+        id: string;
+        name: string;
+        color: string;
+        active: boolean;
+        is_worker_bee: boolean;
+      }[];
+    }>("/api/v1/admin/households"),
+  syncHouseholds: () =>
+    request<{ households: { id: string; name: string; color: string; active: boolean; is_worker_bee: boolean }[] }>(
+      "/api/v1/admin/households/sync",
+      { method: "POST", body: JSON.stringify({}) },
+    ),
+  adminSettings: () => request<{ settings: AdminSettings }>("/api/v1/admin/settings"),
+  updateAdminSettings: (settings: Partial<AdminSettings>) =>
+    request<{ settings: AdminSettings }>("/api/v1/admin/settings", {
+      method: "PUT",
+      body: JSON.stringify(settings),
+    }),
+  updateAdminHousehold: (
+    id: string,
+    data: Partial<{ name: string; color: string; active: boolean; is_worker_bee: boolean }>,
+  ) =>
+    request<{ household: { id: string; name: string; color: string; active: boolean; is_worker_bee: boolean } }>(
+      `/api/v1/admin/households/${id}`,
+      { method: "PATCH", body: JSON.stringify(data) },
     ),
   inviteUser: (email: string, household_id: string) =>
     request<{ invite: { id: string; email: string; expires_at: string } }>(
@@ -262,6 +316,8 @@ export const api = {
         household_name: string;
       }[];
     }>(`/api/v1/periods/${periodId}/assignments/assigned`),
+  assignmentSummary: (periodId: string) =>
+    request<PeriodAssignmentSummary>(`/api/v1/periods/${periodId}/assignments/summary`),
   swapWeeks: (
     periodId: string,
     data: {

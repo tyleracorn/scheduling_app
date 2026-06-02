@@ -11,7 +11,7 @@ import {
 import { OccupancyChoice } from "./OccupancyChoice";
 import { OccupancyDisclaimer } from "./OccupancyDisclaimer";
 
-type Household = { id: string; name: string; color: string };
+type Household = { id: string; name: string; color: string; is_worker_bee?: boolean };
 
 type Props = {
   date: string;
@@ -24,6 +24,7 @@ type Props = {
   onClose: () => void;
   onChanged: () => void;
   draftRefreshToken?: number;
+  draftPanelVisible?: boolean;
 };
 
 function findPickTurnForWeek(draft: DraftState, periodWeekId: string) {
@@ -46,6 +47,7 @@ export function DayDetailDrawer({
   onClose,
   onChanged,
   draftRefreshToken,
+  draftPanelVisible = false,
 }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -322,7 +324,16 @@ export function DayDetailDrawer({
           </dl>
         )}
 
-        {isDraftWeek && week && isUnassigned && isMyActiveTurn && activeTurn && (
+        {isDraftWeek && week && draftPanelVisible && (
+          <section className="mb-4 pb-4 border-b border-indigo-200">
+            <p className="text-sm text-indigo-900">
+              Week picking is in the <strong>Period activity</strong> panel beside the calendar. Use
+              this drawer to view day details and add notes.
+            </p>
+          </section>
+        )}
+
+        {isDraftWeek && week && isUnassigned && isMyActiveTurn && activeTurn && !draftPanelVisible && (
           <section className="mb-4 pb-4 border-b border-indigo-200">
             <h3 className="text-sm font-medium text-indigo-900 mb-2">Draft — your turn</h3>
             <p className="text-xs text-indigo-800 mb-2">
@@ -347,7 +358,7 @@ export function DayDetailDrawer({
           </section>
         )}
 
-        {isDraftWeek && week && isUnassigned && isCoordinator && activeTurn && !isMyActiveTurn && !draft?.on_hold && (
+        {isDraftWeek && week && isUnassigned && isCoordinator && activeTurn && !isMyActiveTurn && !draft?.on_hold && !draftPanelVisible && (
           <section className="mb-4 pb-4 border-b border-indigo-200">
             <h3 className="text-sm font-medium text-indigo-900 mb-2">Draft — coordinator</h3>
             <p className="text-xs text-indigo-800 mb-2">
@@ -370,7 +381,7 @@ export function DayDetailDrawer({
           </section>
         )}
 
-        {isDraftWeek && week && canRevisePick && pickTurn && (
+        {isDraftWeek && week && canRevisePick && pickTurn && !draftPanelVisible && (
           <section className="mb-4 pb-4 border-b border-indigo-200">
             <h3 className="text-sm font-medium text-indigo-900 mb-2">
               {pickTurn.household_id === householdId ? "Your pick" : `${pickTurn.household_name}'s pick`}
@@ -436,6 +447,7 @@ export function DayDetailDrawer({
                 {households.map((h) => (
                   <option key={h.id} value={h.id}>
                     {h.name}
+                    {h.is_worker_bee ? " (group)" : ""}
                   </option>
                 ))}
               </select>
@@ -528,7 +540,8 @@ export function DayDetailDrawer({
               </button>
             </form>
             <p className="text-xs text-slate-500 mt-2">
-              For a date range, use the form at the bottom of the calendar.
+              For a date range, expand &ldquo;Add note or sharing for multiple days&rdquo; below the
+              calendar.
             </p>
           </section>
         ) : (

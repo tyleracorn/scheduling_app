@@ -146,9 +146,9 @@ export function formatPeriodStatus(status: string): string {
   const labels: Record<string, string> = {
     scheduled: "Scheduled",
     open: "Open for notes",
-    draft: "Draft in progress",
-    assignment: "Coordinator assigning weeks",
-    published: "Published",
+    draft: "Pick your weeks",
+    assignment: "Assign remaining weeks",
+    published: "Schedule set",
     archived: "Archived",
   };
   return labels[status] ?? status;

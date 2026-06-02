@@ -7,33 +7,35 @@ type Props = {
 export function CalendarLegend({ schedulingWeekStartDay }: Props) {
   const startName = weekdayName(schedulingWeekStartDay);
   return (
-    <div className="mb-3 flex flex-wrap gap-x-4 gap-y-1 text-xs text-slate-600">
-      <span className="inline-flex items-center gap-1.5">
-        <span className="w-3 h-3 rounded-sm border-l-4 border-indigo-500 bg-indigo-50/80" aria-hidden />
-        Scheduling week starts ({startName})
+    <div className="mb-2 sm:mb-3 flex flex-wrap gap-x-3 sm:gap-x-4 gap-y-1 text-[10px] sm:text-xs text-slate-600">
+      <span className="inline-flex items-center gap-1 sm:gap-1.5">
+        <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-sm border-l-4 border-indigo-500 bg-indigo-50/80" aria-hidden />
+        <span className="sm:hidden">Wk start</span>
+        <span className="hidden sm:inline">Scheduling week starts ({startName})</span>
       </span>
-      <span className="inline-flex items-center gap-1.5">
-        <span className="w-3 h-3 rounded-sm border-r-4 border-slate-400 bg-slate-50" aria-hidden />
-        Scheduling week ends / handoff ({startName})
+      <span className="inline-flex items-center gap-1 sm:gap-1.5">
+        <span className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-sm border-r-4 border-slate-400 bg-slate-50" aria-hidden />
+        <span className="sm:hidden">Wk end</span>
+        <span className="hidden sm:inline">Scheduling week ends / handoff ({startName})</span>
       </span>
-      <span className="text-slate-500">
+      <span className="hidden md:inline text-slate-500">
         Month grid is always Sun–Sat; assignment weeks follow your period plan setting.
       </span>
-      <span className="inline-flex items-center gap-1.5">
+      <span className="inline-flex items-center gap-1 sm:gap-1.5">
         <span
-          className="w-3 h-3 rounded-sm ring-2 ring-inset ring-green-400/75 bg-green-50/70"
+          className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-sm ring-2 ring-inset ring-green-400/75 bg-green-50/70"
           aria-hidden
         />
-        Occupancy (green)
+        Green
       </span>
-      <span className="inline-flex items-center gap-1.5">
+      <span className="inline-flex items-center gap-1 sm:gap-1.5">
         <span
-          className="w-3 h-3 rounded-sm ring-2 ring-inset ring-red-400/75 bg-red-50/70"
+          className="w-2.5 h-2.5 sm:w-3 sm:h-3 rounded-sm ring-2 ring-inset ring-red-400/75 bg-red-50/70"
           aria-hidden
         />
-        Occupancy (red)
+        Red
       </span>
-      <span className="text-slate-500">
+      <span className="hidden lg:inline text-slate-500">
         Handoff days can show two households (outgoing + incoming week).
       </span>
     </div>
