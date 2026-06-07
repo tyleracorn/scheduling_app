@@ -4,14 +4,15 @@ import { api } from "../lib/api";
 import type { Period } from "../lib/period-types";
 import { calendarPathForPeriod } from "../lib/period-navigation";
 import { useAuth } from "../context/AuthContext";
+import { PeriodPlanForm } from "../components/PeriodPlanForm";
 
 function statusLabel(status: string) {
   const map: Record<string, string> = {
     scheduled: "Scheduled",
-    open: "Open",
-    draft: "Draft",
-    assignment: "Assignment",
-    published: "Published",
+    open: "Open for notes",
+    draft: "Pick your weeks",
+    assignment: "Assign remaining weeks",
+    published: "Schedule set",
     archived: "Archived",
   };
   return map[status] ?? status;
@@ -109,16 +110,9 @@ export function PeriodsPage() {
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
         <h1 className="text-2xl font-semibold">Scheduling periods</h1>
-        <div className="flex gap-4 text-sm">
-          <Link to="/" className="text-slate-600 hover:text-slate-900">
-            ← Calendar
-          </Link>
-          {isCoordinator && (
-            <Link to="/settings" className="text-slate-600 hover:text-slate-900">
-              Period plan → Settings
-            </Link>
-          )}
-        </div>
+        <Link to="/" className="text-sm text-slate-600 hover:text-slate-900">
+          ← Calendar
+        </Link>
       </div>
 
       {error && (
@@ -133,13 +127,11 @@ export function PeriodsPage() {
       )}
 
       {isCoordinator && (
-        <p className="mb-6 text-sm text-slate-600">
-          Configure and generate periods in{" "}
-          <Link to="/settings" className="underline text-slate-800">
-            Settings
-          </Link>
-          .
-        </p>
+        <PeriodPlanForm
+          onMessage={setMessage}
+          onError={setError}
+          onPeriodsGenerated={() => void load()}
+        />
       )}
 
       <h2 className="font-medium text-slate-800 mb-3">All periods</h2>
@@ -148,7 +140,7 @@ export function PeriodsPage() {
         <p className="text-slate-500">Loading…</p>
       ) : periods.length === 0 ? (
         <p className="text-slate-500">
-          No periods yet. Coordinators can save a plan and generate periods in Settings.
+          No periods yet. Coordinators can configure the period plan above and generate periods.
         </p>
       ) : (
         <ul className="space-y-4">

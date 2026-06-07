@@ -5,8 +5,6 @@
     "dev": "pnpm --parallel --filter @scheduling/api --filter @scheduling/web dev",
     "dev:api": "pnpm --filter @scheduling/api dev",
     "dev:web": "pnpm --filter @scheduling/web dev",
-    "dev:api": "pnpm --filter @scheduling/api dev",
-    "dev:web": "pnpm --filter @scheduling/web dev",
     "build": "pnpm --filter @scheduling/web build && pnpm --filter @scheduling/api build",
     "lint": "pnpm -r lint",
     "typecheck": "pnpm -r typecheck",

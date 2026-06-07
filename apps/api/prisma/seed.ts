@@ -61,19 +61,24 @@ async function main() {
       passwordHash,
       displayName: "Administrator",
       isAdmin: true,
-      isCoordinator: true,
       emailVerifiedAt: new Date(),
     },
     update: {
       passwordHash,
       isAdmin: true,
-      isCoordinator: true,
       active: true,
     },
   });
 
-  const firstHousehold = await prisma.household.findFirst({ orderBy: { name: "asc" } });
+  const firstHousehold = await prisma.household.findFirst({
+    where: { isWorkerBee: false },
+    orderBy: { name: "asc" },
+  });
   if (firstHousehold) {
+    await prisma.household.update({
+      where: { id: firstHousehold.id },
+      data: { isCoordinator: true },
+    });
     await prisma.householdMembership.upsert({
       where: { userId: admin.id },
       create: { userId: admin.id, householdId: firstHousehold.id },

@@ -11,6 +11,18 @@ function getTransport() {
   });
 }
 
+export function getSmtpStatus() {
+  const configured = Boolean(config.smtp.host);
+  return {
+    configured,
+    mode: configured ? ("smtp" as const) : ("dev" as const),
+    host: config.smtp.host || null,
+    port: config.smtp.port,
+    from: config.smtp.from,
+    has_auth: Boolean(config.smtp.user),
+  };
+}
+
 export async function sendEmail(to: string, subject: string, text: string, html?: string): Promise<void> {
   const transport = getTransport();
   if (!transport) {

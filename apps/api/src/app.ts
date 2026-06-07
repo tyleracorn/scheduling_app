@@ -9,6 +9,7 @@ import { config } from "./lib/config.js";
 import authPlugin from "./plugins/auth.js";
 import { healthRoutes } from "./routes/health.js";
 import { authRoutes } from "./routes/auth.js";
+import { meRoutes } from "./routes/me.js";
 import { adminRoutes } from "./routes/admin.js";
 import calendarRoutes from "./routes/calendar.js";
 import notesRoutes from "./routes/notes.js";
@@ -33,6 +34,7 @@ export async function buildApp() {
   await app.register(authPlugin);
   await app.register(healthRoutes);
   await app.register(authRoutes);
+  await app.register(meRoutes);
   await app.register(adminRoutes);
   await app.register(calendarRoutes);
   await app.register(notesRoutes);

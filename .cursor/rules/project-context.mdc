@@ -7,10 +7,11 @@ alwaysApply: true
 
 ## What This App Does
 
-Scheduling and booking tool for 5–15 cabin co-owners:
-- View shared calendar showing who has the cabin and when
-- Book, swap, and assign time slots
-- Add notes to bookings
+Scheduling tool for 5–15 cabin co-owners:
+- View shared calendar showing which household has each week
+- Round-based draft pick, coordinator assignment, publish
+- Swap weeks and revise picks during draft
+- Add household notes and green/red sharing indicators
 - Works on desktop and mobile browser
 - Runs in Docker; PostgreSQL database via Prisma
 
@@ -31,8 +32,7 @@ Run these before asking for a new feature. Fix errors before adding more code.
 | Check | Command |
 |---|---|
 | Lint | `pnpm lint` |
-| Type errors | `pnpm tsc --noEmit` |
-| Format | `pnpm format` |
+| Type errors | `pnpm typecheck` |
 | Tests | `pnpm test` |
 
 ## Feature Checklist — Before Calling Something Done
@@ -41,7 +41,7 @@ Run these before asking for a new feature. Fix errors before adding more code.
 - [ ] Bad input is handled (empty fields, invalid dates, past dates)
 - [ ] Works on a phone-sized screen
 - [ ] User has an obvious way to undo a mistake
-- [ ] `pnpm lint` and `pnpm tsc` pass
+- [ ] `pnpm lint` and `pnpm typecheck` pass
 
 ## If a Suggestion Feels Too Complex
 

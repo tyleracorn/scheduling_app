@@ -4,8 +4,8 @@ import { AppError } from "../lib/errors.js";
 import { prisma } from "../lib/prisma.js";
 import { generateToken, hashToken, normalizeEmail } from "../lib/tokens.js";
 import { requireAdmin } from "../plugins/auth.js";
-import { sendEmail, inviteLink } from "../services/email.js";
-import { assertCoordinatorLimit } from "../services/coordinators.js";
+import { sendEmail, inviteLink, getSmtpStatus } from "../services/email.js";
+import { assertCoordinatorHouseholdLimit } from "../services/coordinators.js";
 import {
   ensureWorkerBeeHousehold,
   formatHousehold,
@@ -22,6 +22,7 @@ const householdSchema = z.object({
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
   active: z.boolean().optional(),
   is_worker_bee: z.boolean().optional(),
+  is_coordinator: z.boolean().optional(),
 });
 
 const inviteSchema = z.object({
@@ -30,7 +31,6 @@ const inviteSchema = z.object({
 });
 
 const userPatchSchema = z.object({
-  is_coordinator: z.boolean().optional(),
   active: z.boolean().optional(),
   household_id: z.string().uuid().optional(),
 });
@@ -92,12 +92,28 @@ export async function adminRoutes(app: FastifyInstance) {
       throw new AppError(400, "validation_error", "Invalid household", parsed.error.flatten());
     }
     const data = parsed.data;
+    const existing = await prisma.household.findUnique({ where: { id } });
+    if (!existing) {
+      throw new AppError(404, "not_found", "Household not found");
+    }
+
     if (data.is_worker_bee) {
       await prisma.household.updateMany({
         where: { id: { not: id }, isWorkerBee: true },
         data: { isWorkerBee: false },
       });
     }
+
+    const willBeWorkerBee = data.is_worker_bee ?? existing.isWorkerBee;
+    if (data.is_coordinator === true || (data.is_coordinator !== false && existing.isCoordinator)) {
+      if (willBeWorkerBee) {
+        throw new AppError(422, "invalid_household", "Worker Bee cannot be a coordinator household");
+      }
+    }
+    if (data.is_coordinator === true) {
+      await assertCoordinatorHouseholdLimit(id, true);
+    }
+
     const household = await prisma.household.update({
       where: { id },
       data: {
@@ -105,6 +121,7 @@ export async function adminRoutes(app: FastifyInstance) {
         color: data.color,
         active: data.active,
         isWorkerBee: data.is_worker_bee,
+        isCoordinator: willBeWorkerBee ? false : data.is_coordinator,
       },
     });
     return { household: formatHousehold(household) };
@@ -121,10 +138,12 @@ export async function adminRoutes(app: FastifyInstance) {
         email: u.email,
         display_name: u.displayName,
         is_admin: u.isAdmin,
-        is_coordinator: u.isCoordinator,
         active: u.active,
         household_id: u.membership?.householdId ?? null,
         household_name: u.membership?.household.name ?? null,
+        household_is_coordinator: Boolean(
+          u.membership?.household.isCoordinator && !u.membership?.household.isWorkerBee,
+        ),
       })),
     };
   });
@@ -176,13 +195,24 @@ export async function adminRoutes(app: FastifyInstance) {
       throw new AppError(400, "validation_error", "Invalid user patch", parsed.error.flatten());
     }
     const data = parsed.data;
-    if (data.is_coordinator !== undefined) {
-      await assertCoordinatorLimit(id, data.is_coordinator);
+    const admin = requireAdmin(request);
+    const target = await prisma.user.findUnique({ where: { id } });
+    if (!target) {
+      throw new AppError(404, "not_found", "User not found");
     }
+
+    if (data.active === false) {
+      if (id === admin.id) {
+        throw new AppError(409, "cannot_deactivate_self", "You cannot deactivate your own account");
+      }
+      if (target.isAdmin) {
+        throw new AppError(409, "cannot_deactivate_admin", "Administrator accounts cannot be deactivated");
+      }
+    }
+
     const user = await prisma.user.update({
       where: { id },
       data: {
-        isCoordinator: data.is_coordinator,
         active: data.active,
       },
     });
@@ -193,7 +223,7 @@ export async function adminRoutes(app: FastifyInstance) {
         update: { householdId: data.household_id },
       });
     }
-    return { user: { id: user.id, email: user.email, is_coordinator: user.isCoordinator, active: user.active } };
+    return { user: { id: user.id, email: user.email, active: user.active } };
   });
 
   app.get("/api/v1/admin/settings", async () => {
@@ -239,6 +269,61 @@ export async function adminRoutes(app: FastifyInstance) {
         ...formatSystemSettingsForApi(settings),
         household_slot_count: settings.householdSlotCount,
       },
+    };
+  });
+
+  app.get("/api/v1/admin/email/status", async () => {
+    return { email: getSmtpStatus() };
+  });
+
+  app.post("/api/v1/admin/email/test", async (request) => {
+    const admin = requireAdmin(request);
+    const status = getSmtpStatus();
+    if (!status.configured) {
+      throw new AppError(
+        503,
+        "email_not_configured",
+        "SMTP is not configured. Set SMTP_HOST in the server environment.",
+      );
+    }
+    await sendEmail(
+      admin.email,
+      "Cabin Schedule test email",
+      "This is a test message from the cabin scheduling app. Email delivery is working.",
+    );
+    return { ok: true, sent_to: admin.email };
+  });
+
+  app.get("/api/v1/admin/audit", async (request) => {
+    const limitRaw = (request.query as { limit?: string }).limit;
+    const entityType = (request.query as { entity_type?: string }).entity_type;
+    const limit = Math.min(Math.max(parseInt(limitRaw ?? "50", 10) || 50, 1), 200);
+
+    const events = await prisma.auditEvent.findMany({
+      where: entityType ? { entityType } : undefined,
+      orderBy: { createdAt: "desc" },
+      take: limit,
+      include: {
+        actor: { select: { id: true, email: true, displayName: true } },
+      },
+    });
+
+    return {
+      events: events.map((e) => ({
+        id: e.id,
+        event_type: e.eventType,
+        entity_type: e.entityType,
+        entity_id: e.entityId,
+        actor: {
+          id: e.actor.id,
+          email: e.actor.email,
+          display_name: e.actor.displayName,
+        },
+        before: e.before,
+        after: e.after,
+        reason: e.reason,
+        created_at: e.createdAt.toISOString(),
+      })),
     };
   });
 }

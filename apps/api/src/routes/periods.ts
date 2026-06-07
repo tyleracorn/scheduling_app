@@ -35,6 +35,7 @@ import {
   deletePeriod,
   generatePeriodsFromPlan,
   getPeriodPlan,
+  previewPeriodsFromPlan,
   resetPeriod,
   savePeriodPlan,
 } from "../services/period-plan.js";
@@ -144,6 +145,11 @@ async function periodsRoutes(app: FastifyInstance) {
       replace_unstarted: parsed.data?.replace_unstarted,
     });
     return result;
+  });
+
+  app.post("/api/v1/periods/plan/preview", async (request) => {
+    requireCoordinator(request);
+    return await previewPeriodsFromPlan();
   });
 
   app.get("/api/v1/periods/:id", async (request) => {

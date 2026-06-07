@@ -27,14 +27,15 @@ async function loadUser(userId: string): Promise<AuthUser | null> {
     include: { membership: { include: { household: true } } },
   });
   if (!user || !user.active) return null;
+  const household = user.membership?.household;
   return {
     id: user.id,
     email: user.email,
     displayName: user.displayName,
     isAdmin: user.isAdmin,
-    isCoordinator: user.isCoordinator,
+    isCoordinator: Boolean(household?.isCoordinator && !household.isWorkerBee),
     householdId: user.membership?.householdId ?? null,
-    householdName: user.membership?.household.name ?? null,
+    householdName: household?.name ?? null,
   };
 }
 

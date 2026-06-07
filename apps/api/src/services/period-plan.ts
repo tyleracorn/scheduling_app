@@ -161,6 +161,73 @@ export async function generatePeriodsFromPlan(
   return { created, skipped };
 }
 
+export async function previewPeriodsFromPlan() {
+  const settings = await getSystemSettings();
+  if (!settings.periodFirstWeekStart) {
+    throw new AppError(422, "plan_incomplete", "Save a period plan with a first week start date first");
+  }
+
+  const planAnchor = startOfWeek(settings.periodFirstWeekStart, settings.weekStartDay);
+  const existingCount = await prisma.schedulingPeriod.count({
+    where: { status: { in: BLOCKING_STATUSES } },
+  });
+
+  const periods: {
+    name: string;
+    start_date: string;
+    end_date: string;
+    week_count: number;
+    skipped: boolean;
+    skip_reason: string | null;
+  }[] = [];
+
+  let slot = 0;
+  let placed = 0;
+  const maxSlots = Math.max(settings.periodsToSchedule * 4, 24);
+
+  while (placed < settings.periodsToSchedule && slot < maxSlots) {
+    const periodStart = addDays(planAnchor, slot * settings.periodWeekCount * 7);
+    slot += 1;
+    const weeks = computePeriodWeeksExact(
+      periodStart,
+      settings.periodWeekCount,
+      settings.weekStartDay,
+    );
+    const endDate = weeks[weeks.length - 1].weekEndDate;
+    const startStr = toDateString(periodStart);
+    const endStr = toDateString(endDate);
+
+    const overlap = await findOverlappingPeriod(periodStart, endDate);
+    if (overlap) {
+      periods.push({
+        name: `Period ${existingCount + placed + 1} (${startStr})`,
+        start_date: startStr,
+        end_date: endStr,
+        week_count: weeks.length,
+        skipped: true,
+        skip_reason: `Overlaps "${overlap.name}" (${formatBlockingStatus(overlap.status)})`,
+      });
+      continue;
+    }
+
+    placed += 1;
+    periods.push({
+      name: `Period ${existingCount + placed} (${startStr})`,
+      start_date: startStr,
+      end_date: endStr,
+      week_count: weeks.length,
+      skipped: false,
+      skip_reason: null,
+    });
+  }
+
+  return {
+    periods,
+    would_create: placed,
+    requested: settings.periodsToSchedule,
+  };
+}
+
 export async function deletePeriod(periodId: string) {
   const period = await prisma.schedulingPeriod.findUnique({ where: { id: periodId } });
   if (!period) throw new AppError(404, "not_found", "Period not found");

@@ -76,6 +76,16 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
 
 export const api = {
   me: () => request<{ user: AuthUser }>("/api/v1/auth/me"),
+  updateProfile: (display_name: string) =>
+    request<{ user: AuthUser }>("/api/v1/me", {
+      method: "PATCH",
+      body: JSON.stringify({ display_name }),
+    }),
+  changePassword: (current_password: string, new_password: string) =>
+    request<{ ok: boolean }>("/api/v1/me/password", {
+      method: "POST",
+      body: JSON.stringify({ current_password, new_password }),
+    }),
   login: (email: string, password: string) =>
     request<{ ok: boolean }>("/api/v1/auth/login", {
       method: "POST",
@@ -115,10 +125,20 @@ export const api = {
         color: string;
         active: boolean;
         is_worker_bee: boolean;
+        is_coordinator: boolean;
       }[];
     }>("/api/v1/admin/households"),
   syncHouseholds: () =>
-    request<{ households: { id: string; name: string; color: string; active: boolean; is_worker_bee: boolean }[] }>(
+    request<{
+      households: {
+        id: string;
+        name: string;
+        color: string;
+        active: boolean;
+        is_worker_bee: boolean;
+        is_coordinator: boolean;
+      }[];
+    }>(
       "/api/v1/admin/households/sync",
       { method: "POST", body: JSON.stringify({}) },
     ),
@@ -130,9 +150,18 @@ export const api = {
     }),
   updateAdminHousehold: (
     id: string,
-    data: Partial<{ name: string; color: string; active: boolean; is_worker_bee: boolean }>,
+    data: Partial<{ name: string; color: string; active: boolean; is_worker_bee: boolean; is_coordinator: boolean }>,
   ) =>
-    request<{ household: { id: string; name: string; color: string; active: boolean; is_worker_bee: boolean } }>(
+    request<{
+      household: {
+        id: string;
+        name: string;
+        color: string;
+        active: boolean;
+        is_worker_bee: boolean;
+        is_coordinator: boolean;
+      };
+    }>(
       `/api/v1/admin/households/${id}`,
       { method: "PATCH", body: JSON.stringify(data) },
     ),
@@ -141,6 +170,62 @@ export const api = {
       "/api/v1/admin/users/invite",
       { method: "POST", body: JSON.stringify({ email, household_id }) },
     ),
+  adminUsers: () =>
+    request<{
+      users: {
+        id: string;
+        email: string;
+        display_name: string;
+        is_admin: boolean;
+        active: boolean;
+        household_id: string | null;
+        household_name: string | null;
+        household_is_coordinator: boolean;
+      }[];
+    }>("/api/v1/admin/users"),
+  updateAdminUser: (
+    id: string,
+    data: Partial<{ active: boolean; household_id: string }>,
+  ) =>
+    request<{ user: { id: string; email: string; active: boolean } }>(
+      `/api/v1/admin/users/${id}`,
+      { method: "PATCH", body: JSON.stringify(data) },
+    ),
+  adminAudit: (params?: { limit?: number; entity_type?: string }) => {
+    const q = new URLSearchParams();
+    if (params?.limit) q.set("limit", String(params.limit));
+    if (params?.entity_type) q.set("entity_type", params.entity_type);
+    const qs = q.toString();
+    return request<{
+      events: {
+        id: string;
+        event_type: string;
+        entity_type: string;
+        entity_id: string;
+        actor: { id: string; email: string; display_name: string };
+        before: unknown;
+        after: unknown;
+        reason: string | null;
+        created_at: string;
+      }[];
+    }>(`/api/v1/admin/audit${qs ? `?${qs}` : ""}`);
+  },
+  adminEmailStatus: () =>
+    request<{
+      email: {
+        configured: boolean;
+        mode: "smtp" | "dev";
+        host: string | null;
+        port: number;
+        from: string;
+        has_auth: boolean;
+      };
+    }>("/api/v1/admin/email/status"),
+  adminEmailTest: () =>
+    request<{ ok: boolean; sent_to: string }>("/api/v1/admin/email/test", {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
   calendar: (start: string, end: string) =>
     request<CalendarResponse>(`/api/v1/calendar?start=${start}&end=${end}`),
   createNote: (data: { start_date: string; end_date: string; body: string }) =>
@@ -194,6 +279,19 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ replace_unstarted: replace_unstarted ?? false }),
     }),
+  previewPeriodPlan: () =>
+    request<{
+      periods: {
+        name: string;
+        start_date: string;
+        end_date: string;
+        week_count: number;
+        skipped: boolean;
+        skip_reason: string | null;
+      }[];
+      would_create: number;
+      requested: number;
+    }>("/api/v1/periods/plan/preview", { method: "POST", body: JSON.stringify({}) }),
   deletePeriod: (id: string) =>
     request<{ ok: boolean }>(`/api/v1/periods/${id}`, { method: "DELETE" }),
   resetPeriod: (id: string) =>
@@ -338,11 +436,6 @@ export const api = {
       { method: "POST", body: JSON.stringify({}) },
     ),
   systemSettings: () => request<{ settings: SystemSettings }>("/api/v1/settings"),
-  updateSystemSettings: (settings: Partial<SystemSettings>) =>
-    request<{ settings: SystemSettings }>("/api/v1/settings", {
-      method: "PUT",
-      body: JSON.stringify(settings),
-    }),
   notifications: (cursor?: string) => {
     const qs = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
     return request<{ notifications: NotificationItem[]; next_cursor: string | null }>(

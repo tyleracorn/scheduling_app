@@ -3,6 +3,7 @@ import { sendEmail } from "./email.js";
 
 const EMAIL_EVENT_TYPES = new Set([
   "your_turn",
+  "turn_warning",
   "draft_on_hold",
   "assignment_phase_started",
   "period_published",
@@ -57,10 +58,44 @@ export async function notifyCoordinators(
   payload: Record<string, unknown> = {},
   options: { email?: boolean } = { email: true },
 ) {
-  const coordinators = await prisma.user.findMany({
-    where: { active: true, OR: [{ isCoordinator: true }, { isAdmin: true }] },
+  const coordinatorHouseholds = await prisma.household.findMany({
+    where: { isCoordinator: true, isWorkerBee: false, active: true },
+    select: { id: true },
   });
-  for (const u of coordinators) {
+  const householdIds = coordinatorHouseholds.map((h) => h.id);
+
+  const members =
+    householdIds.length > 0
+      ? await prisma.householdMembership.findMany({
+          where: { householdId: { in: householdIds } },
+          include: { user: true },
+        })
+      : [];
+
+  const admins = await prisma.user.findMany({
+    where: { active: true, isAdmin: true },
+  });
+
+  const notified = new Set<string>();
+  for (const m of members) {
+    if (!m.user.active || notified.has(m.user.id)) continue;
+    notified.add(m.user.id);
+    await prisma.notification.create({
+      data: {
+        userId: m.user.id,
+        type,
+        title,
+        body,
+        payload: payload as object,
+      },
+    });
+    if (wantsEmail(type, options)) {
+      await deliverEmail(m.user.id, type, title, body, true);
+    }
+  }
+  for (const u of admins) {
+    if (notified.has(u.id)) continue;
+    notified.add(u.id);
     await prisma.notification.create({
       data: {
         userId: u.id,

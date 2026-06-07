@@ -51,7 +51,7 @@ export function Layout() {
           </Link>
 
           <nav className="hidden md:flex items-center gap-4 text-sm shrink-0">
-            {user && (
+            {user && (user.isCoordinator || user.isAdmin) && (
               <NavLink to="/periods" className={navLinkClass}>
                 Periods
               </NavLink>
@@ -117,15 +117,17 @@ export function Layout() {
               >
                 Calendar
               </NavLink>
-              <NavLink
-                to="/periods"
-                className={({ isActive }) =>
-                  `block rounded px-3 py-2.5 text-sm ${isActive ? "bg-slate-100 font-medium text-slate-900" : "text-slate-700 hover:bg-slate-50"}`
-                }
-                onClick={() => setMenuOpen(false)}
-              >
-                Periods
-              </NavLink>
+              {(user.isCoordinator || user.isAdmin) && (
+                <NavLink
+                  to="/periods"
+                  className={({ isActive }) =>
+                    `block rounded px-3 py-2.5 text-sm ${isActive ? "bg-slate-100 font-medium text-slate-900" : "text-slate-700 hover:bg-slate-50"}`
+                  }
+                  onClick={() => setMenuOpen(false)}
+                >
+                  Periods
+                </NavLink>
+              )}
               <NavLink
                 to="/settings"
                 className={({ isActive }) =>

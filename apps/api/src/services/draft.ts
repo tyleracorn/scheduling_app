@@ -605,6 +605,42 @@ export async function openDuePeriods() {
   }
 }
 
+export async function processTurnWarnings() {
+  const settings = await getSystemSettings();
+  const leadMs = settings.pickWarningLeadHours * MS_PER_HOUR;
+  if (leadMs <= 0) return;
+
+  const now = new Date();
+  const activeTurns = await prisma.draftTurn.findMany({
+    where: {
+      status: "active",
+      warningSentAt: null,
+      expiresAt: { not: null },
+    },
+    include: { period: true, household: true },
+  });
+
+  for (const turn of activeTurns) {
+    if (!turn.expiresAt || turn.period.draftOnHold || turn.period.status !== "draft") continue;
+    const warningAt = new Date(turn.expiresAt.getTime() - leadMs);
+    if (now < warningAt) continue;
+
+    await prisma.draftTurn.update({
+      where: { id: turn.id },
+      data: { warningSentAt: now },
+    });
+
+    const deadline = turn.expiresAt.toLocaleString();
+    await notifyHousehold(
+      turn.householdId,
+      "turn_warning",
+      "Pick deadline approaching",
+      `${turn.household.name}: your turn in ${turn.period.name} ends soon (${deadline}). Pick or skip before auto-skip.`,
+      { period_id: turn.schedulingPeriodId, turn_id: turn.id },
+    );
+  }
+}
+
 export async function processExpiredTurns() {
   const expired = await prisma.draftTurn.findMany({
     where: { status: "active", expiresAt: { lte: new Date() } },

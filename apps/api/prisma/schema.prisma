@@ -47,6 +47,7 @@ model Household {
   color        String   @db.Char(7)
   active       Boolean  @default(true)
   isWorkerBee  Boolean  @default(false) @map("is_worker_bee")
+  isCoordinator Boolean @default(false) @map("is_coordinator")
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
@@ -67,7 +68,6 @@ model User {
   passwordHash    String    @map("password_hash") @db.VarChar(255)
   displayName     String    @map("display_name") @db.VarChar(100)
   isAdmin         Boolean   @default(false) @map("is_admin")
-  isCoordinator   Boolean   @default(false) @map("is_coordinator")
   active          Boolean   @default(true)
   emailVerifiedAt DateTime? @map("email_verified_at")
   createdAt       DateTime  @default(now()) @map("created_at")
@@ -220,6 +220,7 @@ model DraftTurn {
   actedByUserId      String?          @map("acted_by_user_id") @db.Uuid
   startedAt          DateTime?        @map("started_at")
   expiresAt          DateTime?        @map("expires_at")
+  warningSentAt      DateTime?        @map("warning_sent_at")
   completedAt        DateTime?        @map("completed_at")
   clientActionId     String?          @map("client_action_id") @db.Uuid
 
