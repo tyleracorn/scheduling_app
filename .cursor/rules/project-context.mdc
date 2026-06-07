@@ -1,0 +1,50 @@
+---
+description: Project structure, repo layout, quality checks, and feature checklist for cabin scheduling app
+alwaysApply: true
+---
+
+# Cabin Scheduling App — Project Context
+
+## What This App Does
+
+Scheduling and booking tool for 5–15 cabin co-owners:
+- View shared calendar showing who has the cabin and when
+- Book, swap, and assign time slots
+- Add notes to bookings
+- Works on desktop and mobile browser
+- Runs in Docker; PostgreSQL database via Prisma
+
+## Repository Layout
+
+```
+apps/api/     Fastify + Prisma (PostgreSQL)
+apps/web/     React + Vite
+docker/       Entrypoint: migrate, seed, start
+```
+
+Do not add new top-level directories without a clear reason. New features go inside the existing apps.
+
+## Quality Checks
+
+Run these before asking for a new feature. Fix errors before adding more code.
+
+| Check | Command |
+|---|---|
+| Lint | `pnpm lint` |
+| Type errors | `pnpm tsc --noEmit` |
+| Format | `pnpm format` |
+| Tests | `pnpm test` |
+
+## Feature Checklist — Before Calling Something Done
+
+- [ ] Happy path works in the browser
+- [ ] Bad input is handled (empty fields, invalid dates, past dates)
+- [ ] Works on a phone-sized screen
+- [ ] User has an obvious way to undo a mistake
+- [ ] `pnpm lint` and `pnpm tsc` pass
+
+## If a Suggestion Feels Too Complex
+
+Say: *"This seems more complex than needed for a 10-person cabin app. What's the simplest version that would still work? What are we giving up by going simpler?"*
+
+The AI defaults to patterns from large production systems. This project does not need them.

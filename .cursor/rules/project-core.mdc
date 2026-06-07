@@ -1,0 +1,61 @@
+---
+description: Core agent rules and hard constraints for cabin scheduling app
+alwaysApply: true
+---
+
+# Cabin Scheduling App — Core Rules
+
+This is a small internal scheduling tool for ~10 cabin co-owners. Not a public web service. All decisions should reflect that.
+
+## Before Writing Any Code
+
+1. State what the code will do in one sentence.
+2. Identify which existing file or component this belongs in.
+3. If a new file is needed, explain why an existing one doesn't work.
+4. If a new package is needed, name it and explain why the existing tools can't do the job.
+
+If you can't do these four things, ask a clarifying question instead of writing code.
+
+## Scope and Simplicity
+
+- Do not build for scale. This serves ~10 people.
+- Prefer the simplest solution that works. If two approaches exist, choose fewer moving parts.
+- Do not introduce new libraries or packages without justification.
+- Do not add authentication complexity beyond what a small trusted group needs.
+
+## Stack Constraints
+
+- Backend: **Fastify + Prisma only.** Do not suggest Express, tRPC, GraphQL, or other API layers.
+- Frontend: **React + Vite.** Do not introduce Next.js, Remix, or server-side rendering.
+- Database: **PostgreSQL via Prisma.** All schema changes go through `prisma/schema.prisma` + `pnpm prisma migrate dev`. Never modify the database directly.
+- Containers: **Docker only.** Do not suggest Kubernetes or cloud-native orchestration.
+- Package manager: **pnpm only.** Do not use npm or yarn commands.
+
+## Code Style
+
+- Write code readable by someone who knows Python but is new to JavaScript/TypeScript.
+- Prefer explicit over clever. Avoid one-liners that sacrifice readability.
+- Keep components and functions small and single-purpose. If a function is getting long, split it.
+- Use TypeScript types where they aid clarity; don't obsess over type completeness.
+
+## React Components
+
+- Build reusable components for anything that appears more than once: booking cards, date pickers, user selectors, status badges.
+- Components live in `apps/web/src/components/`. Name clearly: `BookingCard.tsx`, `SlotPicker.tsx`.
+- A component does one thing. If it's doing two, split it.
+- Do not put data-fetching logic inside display components. Fetch in a parent or custom hook, pass as props.
+
+## API Design
+
+- Keep routes flat and predictable: `/bookings`, `/bookings/:id`, `/slots`, `/users`.
+- Do not nest routes more than two levels deep.
+- Always return consistent response shapes with a `data` field and an `error` field.
+- Validate all inputs at the API boundary using Fastify's built-in schema validation.
+
+## Never Do
+
+- Never delete migration history in `prisma/migrations/`.
+- Never hardcode secrets — use environment variables via `.env`.
+- Never commit a `.env` file.
+- Never bypass Prisma to modify the database schema directly.
+- Never add a new feature mid-session without finishing and testing the current one first.
