@@ -50,9 +50,41 @@ First build may take several minutes. Updates: pull/copy new code, then `docker 
 
 **Synology Container Manager:** Create → Project → upload or paste `docker-compose.yml`, set the env file path to your `.env`, deploy.
 
-### Pre-built image (optional)
+### Pre-built image from GHCR (TrueNAS / Komodo)
 
-If builds on the NAS are slow or run out of memory, build the image on your PC or in CI, push to a registry (e.g. GitHub Container Registry), and pull on the NAS. Add a compose override:
+Build and push from your PC, then pull on the NAS. Example files:
+
+- [`docker-compose.nas.yml`](../docker-compose.nas.yml) — `app` pulls `ghcr.io/tyleracorn/scheduling-app`, no `build`
+- [`.env.nas.example`](../.env.nas.example) — production `.env` template
+
+On the NAS (only these files + `.env` are required; no full repo clone):
+
+```bash
+cp .env.nas.example .env
+# edit .env — SESSION_SECRET, APP_URL, passwords, admin email
+
+docker login ghcr.io -u YOUR_GITHUB_USER
+docker compose -f docker-compose.nas.yml pull
+docker compose -f docker-compose.nas.yml up -d
+```
+
+Updates after a new push from your PC:
+
+```bash
+docker compose -f docker-compose.nas.yml pull app
+docker compose -f docker-compose.nas.yml up -d app
+```
+
+Fresh database (wipes all data):
+
+```bash
+docker compose -f docker-compose.nas.yml down -v
+docker compose -f docker-compose.nas.yml up -d
+```
+
+### Pre-built image (compose override)
+
+If you prefer keeping the repo `docker-compose.yml` with `build: .`, use an override:
 
 ```yaml
 # docker-compose.prod.yml

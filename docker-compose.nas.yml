@@ -1,0 +1,72 @@
+# TrueNAS / Komodo — pull pre-built app image from GHCR (no build on NAS).
+#
+# Setup:
+#   cp .env.nas.example .env
+#   # edit .env (secrets, APP_URL, admin email)
+#   docker login ghcr.io -u YOUR_GITHUB_USER
+#   docker compose -f docker-compose.nas.yml pull
+#   docker compose -f docker-compose.nas.yml up -d
+#
+# Updates (after you push a new image from your PC):
+#   docker compose -f docker-compose.nas.yml pull app
+#   docker compose -f docker-compose.nas.yml up -d app
+
+services:
+  db:
+    image: postgres:16-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-cabin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-cabin_scheduling}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      # Optional: bind mount to a TrueNAS dataset instead of a named volume.
+      # Create the folder and chown to 999:999 (postgres user in the image).
+      # - ${POSTGRES_DATA_PATH}:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cabin} -d ${POSTGRES_DB:-cabin_scheduling}"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+    networks:
+      - cabin_internal
+
+  app:
+    image: ghcr.io/tyleracorn/scheduling-app:${APP_IMAGE_TAG:-latest}
+    pull_policy: always
+    restart: unless-stopped
+    ports:
+      # Omit this port mapping if your reverse proxy joins cabin_proxy below.
+      - "${APP_HOST_PORT:-3000}:3000"
+    environment:
+      DATABASE_URL: postgresql://${POSTGRES_USER:-cabin}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-cabin_scheduling}
+      NODE_ENV: production
+      PORT: 3000
+      SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in .env}
+      APP_URL: ${APP_URL:?Set APP_URL in .env}
+      SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:?Set SEED_ADMIN_EMAIL in .env}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:?Set SEED_ADMIN_PASSWORD in .env}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@example.com}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - cabin_internal
+      # Uncomment to attach to an existing Docker network used by your reverse proxy.
+      # - cabin_proxy
+
+networks:
+  cabin_internal:
+    driver: bridge
+  # Uncomment and set the name to match your TrueNAS / Komodo proxy network.
+  # cabin_proxy:
+  #   external: true
+  #   name: ${PROXY_NETWORK:-proxy}
+
+volumes:
+  postgres_data:
