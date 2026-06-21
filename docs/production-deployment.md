@@ -54,7 +54,7 @@ First build may take several minutes. Updates: pull/copy new code, then `docker 
 
 Build and push from your PC, then pull on the NAS. Example files:
 
-- [`docker-compose.nas.yml`](../docker-compose.nas.yml) — `app` pulls `ghcr.io/tyleracorn/scheduling-app`, no `build`
+- [`docker-compose.nas.yml`](../docker-compose.nas.yml) — `app` pulls `ghcr.io/tyleracorn/scheduling_app`, no `build`
 - [`.env.nas.example`](../.env.nas.example) — production `.env` template
 
 On the NAS (only these files + `.env` are required; no full repo clone):
@@ -90,7 +90,7 @@ If you prefer keeping the repo `docker-compose.yml` with `build: .`, use an over
 # docker-compose.prod.yml
 services:
   app:
-    image: ghcr.io/YOUR_ORG/scheduling-app:latest
+    image: ghcr.io/YOUR_ORG/scheduling_app:latest
 ```
 
 ```bash

@@ -33,7 +33,7 @@ services:
       - cabin_internal
 
   app:
-    image: ghcr.io/tyleracorn/scheduling-app:${APP_IMAGE_TAG:-latest}
+    image: ghcr.io/tyleracorn/scheduling_app:${APP_IMAGE_TAG:-latest}
     pull_policy: always
     restart: unless-stopped
     ports:
