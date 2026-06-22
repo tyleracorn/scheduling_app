@@ -75,6 +75,27 @@ export async function authRoutes(app: FastifyInstance) {
     return reply.status(204).send();
   });
 
+  app.get("/api/v1/auth/invite", async (request) => {
+    const token = (request.query as { token?: string }).token;
+    if (!token) {
+      throw new AppError(400, "validation_error", "Missing invite token");
+    }
+    const invite = await prisma.invite.findFirst({
+      where: { tokenHash: hashToken(token), acceptedAt: null, expiresAt: { gt: new Date() } },
+      include: { household: true },
+    });
+    if (!invite) {
+      throw new AppError(400, "invalid_token", "Invite link is invalid or expired");
+    }
+    return {
+      invite: {
+        email: invite.email,
+        household_name: invite.household.name,
+        expires_at: invite.expiresAt,
+      },
+    };
+  });
+
   app.post("/api/v1/auth/accept-invite", async (request, reply) => {
     const parsed = acceptInviteSchema.safeParse(request.body);
     if (!parsed.success) {

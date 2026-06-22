@@ -104,7 +104,7 @@ Point HTTPS at **port 3000** on the host running the `app` container. The same p
 
 ## Post-deploy setup
 
-1. Log in with `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD`; change password under **Settings**.
+1. Log in with `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` (set on first deploy only); change password under **Settings**.
 2. **Admin → Households** — sync slot count, name/color households, mark up to **three owning households** as **Coordinator** (any active member of those households can run periods and drafts).
 3. **Admin → People** — invite users into households.
 4. **Admin → Email** — send a test email after configuring `SMTP_*` in `.env`.
@@ -125,7 +125,19 @@ Health checks:
 - `GET /health` — process up
 - `GET /health/ready` — database reachable
 
-Migrations and seed run automatically via `docker/entrypoint.sh` on container start.
+Migrations run automatically on every container start via `docker/entrypoint.sh`. A **bootstrap seed** also runs: it creates the admin account, default households, and system settings if missing. It does **not**:
+
+- reset the admin password after you change it in Settings
+- recreate demo calendar periods (unless you set `SEED_DEMO=true`, which you should not in production)
+- change which household is coordinator after you configure one
+
+| Variable | When to use |
+|----------|-------------|
+| `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` | First deploy — creates admin if missing |
+| `FORCE_SEED_PASSWORD=true` | Recovery only — resets admin password from env on next start |
+| `SEED_DEMO=true` | **Dev only** — sample calendar periods and notes |
+
+Local development: `pnpm db:seed` (bootstrap) or `pnpm db:seed:demo` (bootstrap + demo data).
 
 ## Database backup
 

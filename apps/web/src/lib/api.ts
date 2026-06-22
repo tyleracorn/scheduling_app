@@ -97,6 +97,10 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ token, password, display_name }),
     }),
+  getInvitePreview: (token: string) =>
+    request<{
+      invite: { email: string; household_name: string; expires_at: string };
+    }>(`/api/v1/auth/invite?token=${encodeURIComponent(token)}`),
   forgotPassword: (email: string) =>
     request<{ ok: boolean; message: string }>("/api/v1/auth/forgot-password", {
       method: "POST",
@@ -166,10 +170,38 @@ export const api = {
       { method: "PATCH", body: JSON.stringify(data) },
     ),
   inviteUser: (email: string, household_id: string) =>
-    request<{ invite: { id: string; email: string; expires_at: string } }>(
-      "/api/v1/admin/users/invite",
-      { method: "POST", body: JSON.stringify({ email, household_id }) },
-    ),
+    request<{
+      invite: {
+        id: string;
+        email: string;
+        expires_at: string;
+        household_name: string;
+        invite_link: string;
+      };
+    }>("/api/v1/admin/users/invite", {
+      method: "POST",
+      body: JSON.stringify({ email, household_id }),
+    }),
+  adminInvites: () =>
+    request<{
+      invites: {
+        id: string;
+        email: string;
+        household_name: string;
+        expires_at: string;
+        created_at: string;
+      }[];
+    }>("/api/v1/admin/invites"),
+  regenerateInviteLink: (id: string) =>
+    request<{
+      invite: {
+        id: string;
+        email: string;
+        expires_at: string;
+        household_name: string;
+        invite_link: string;
+      };
+    }>(`/api/v1/admin/invites/${id}/regenerate`, { method: "POST" }),
   adminUsers: () =>
     request<{
       users: {

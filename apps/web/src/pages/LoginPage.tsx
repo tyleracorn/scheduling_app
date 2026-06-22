@@ -65,6 +65,10 @@ export function LoginPage() {
           Forgot password?
         </Link>
       </p>
+      <p className="mt-4 text-sm text-slate-500">
+        New here? Accounts are created by invitation only. Ask your cabin admin for an invite link
+        — you will use that link to set your password and join your household.
+      </p>
     </div>
   );
 }

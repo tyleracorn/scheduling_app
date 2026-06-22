@@ -185,7 +185,66 @@ export async function adminRoutes(app: FastifyInstance) {
       "You're invited to the cabin schedule",
       `You've been invited to join household "${household.name}".\n\nAccept invite (7 days):\n${link}`,
     );
-    return { invite: { id: invite.id, email: invite.email, expires_at: invite.expiresAt } };
+    return {
+      invite: {
+        id: invite.id,
+        email: invite.email,
+        expires_at: invite.expiresAt,
+        household_name: household.name,
+        invite_link: link,
+      },
+    };
+  });
+
+  app.get("/api/v1/admin/invites", async () => {
+    const invites = await prisma.invite.findMany({
+      where: { acceptedAt: null, expiresAt: { gt: new Date() } },
+      orderBy: { createdAt: "desc" },
+      include: { household: true },
+    });
+    return {
+      invites: invites.map((inv) => ({
+        id: inv.id,
+        email: inv.email,
+        household_name: inv.household.name,
+        expires_at: inv.expiresAt,
+        created_at: inv.createdAt,
+      })),
+    };
+  });
+
+  app.post("/api/v1/admin/invites/:id/regenerate", async (request) => {
+    const { id } = request.params as { id: string };
+    const invite = await prisma.invite.findUnique({
+      where: { id },
+      include: { household: true },
+    });
+    if (!invite || invite.acceptedAt) {
+      throw new AppError(404, "not_found", "Invite not found");
+    }
+    if (invite.expiresAt <= new Date()) {
+      throw new AppError(410, "expired", "Invite has expired — send a new invite instead");
+    }
+    const token = generateToken();
+    const link = inviteLink(token);
+    await prisma.invite.update({
+      where: { id },
+      data: { tokenHash: hashToken(token) },
+    });
+    await sendEmail(
+      invite.email,
+      "You're invited to the cabin schedule",
+      `You've been invited to join household "${invite.household.name}".\n\nAccept invite (7 days):\n${link}`,
+    );
+    return {
+      invite: {
+        id: invite.id,
+        email: invite.email,
+        expires_at: invite.expiresAt,
+        household_name: invite.household.name,
+        invite_link: link,
+      },
+    };
   });
 
   app.patch("/api/v1/admin/users/:id", async (request) => {

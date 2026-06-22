@@ -1,6 +1,6 @@
 import { PrismaClient } from "@prisma/client";
 import bcrypt from "bcrypt";
-import { computePeriodWeeks } from "../src/lib/period-weeks.js";
+import { computePeriodWeeks } from "../dist/lib/period-weeks.js";
 
 const prisma = new PrismaClient();
 
@@ -12,7 +12,13 @@ const HOUSEHOLDS = [
   { name: "Household 5", color: "#9333EA" },
 ];
 
-async function main() {
+function envFlag(name: string): boolean {
+  const value = process.env[name]?.toLowerCase();
+  return value === "1" || value === "true" || value === "yes";
+}
+
+/** Idempotent bootstrap: settings, households, admin. Safe to run on every container start. */
+async function seedBootstrap() {
   await prisma.systemSettings.upsert({
     where: { id: 1 },
     create: {
@@ -53,42 +59,50 @@ async function main() {
   const email = (process.env.SEED_ADMIN_EMAIL ?? "admin@example.com").toLowerCase();
   const password = process.env.SEED_ADMIN_PASSWORD ?? "changeme";
   const passwordHash = await bcrypt.hash(password, 12);
+  const forcePassword = envFlag("FORCE_SEED_PASSWORD");
 
-  const admin = await prisma.user.upsert({
-    where: { email },
-    create: {
-      email,
-      passwordHash,
-      displayName: "Administrator",
-      isAdmin: true,
-      emailVerifiedAt: new Date(),
-    },
-    update: {
-      passwordHash,
-      isAdmin: true,
-      active: true,
-    },
-  });
+  const existingAdmin = await prisma.user.findUnique({ where: { email } });
+  const admin = existingAdmin
+    ? await prisma.user.update({
+        where: { email },
+        data: {
+          isAdmin: true,
+          active: true,
+          ...(forcePassword ? { passwordHash } : {}),
+        },
+      })
+    : await prisma.user.create({
+        data: {
+          email,
+          passwordHash,
+          displayName: "Administrator",
+          isAdmin: true,
+          emailVerifiedAt: new Date(),
+        },
+      });
 
   const firstHousehold = await prisma.household.findFirst({
     where: { isWorkerBee: false },
     orderBy: { name: "asc" },
   });
   if (firstHousehold) {
-    await prisma.household.update({
-      where: { id: firstHousehold.id },
-      data: { isCoordinator: true },
-    });
-    await prisma.householdMembership.upsert({
-      where: { userId: admin.id },
-      create: { userId: admin.id, householdId: firstHousehold.id },
-      update: { householdId: firstHousehold.id },
-    });
+    const hasCoordinator = await prisma.household.findFirst({ where: { isCoordinator: true } });
+    if (!hasCoordinator) {
+      await prisma.household.update({
+        where: { id: firstHousehold.id },
+        data: { isCoordinator: true },
+      });
+    }
+
+    const membership = await prisma.householdMembership.findUnique({ where: { userId: admin.id } });
+    if (!membership) {
+      await prisma.householdMembership.create({
+        data: { userId: admin.id, householdId: firstHousehold.id },
+      });
+    }
   }
 
-  await seedDemoCalendar(admin.id);
-
-  console.info(`Seed complete. Admin: ${email}`);
+  return admin;
 }
 
 async function seedDemoCalendar(adminUserId: string) {
@@ -263,6 +277,17 @@ async function seedDemoNotesAndOccupancy(
       });
     }
   }
+}
+
+async function main() {
+  const admin = await seedBootstrap();
+
+  if (envFlag("SEED_DEMO")) {
+    await seedDemoCalendar(admin.id);
+    console.info("Demo calendar data seeded.");
+  }
+
+  console.info(`Seed complete. Admin: ${admin.email}`);
 }
 
 main()

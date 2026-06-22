@@ -41,6 +41,23 @@ type EmailStatus = {
   has_auth: boolean;
 };
 
+type PendingInvite = {
+  id: string;
+  email: string;
+  household_name: string;
+  expires_at: string;
+  created_at: string;
+};
+
+async function copyText(text: string): Promise<boolean> {
+  try {
+    await navigator.clipboard.writeText(text);
+    return true;
+  } catch {
+    return false;
+  }
+}
+
 const SECTIONS = [
   { id: "people", label: "People" },
   { id: "households", label: "Households" },
@@ -58,6 +75,7 @@ function userRoleLabel(u: AdminUser) {
 export function AdminPage() {
   const [households, setHouseholds] = useState<Household[]>([]);
   const [users, setUsers] = useState<AdminUser[]>([]);
+  const [pendingInvites, setPendingInvites] = useState<PendingInvite[]>([]);
   const [auditEvents, setAuditEvents] = useState<AuditEvent[]>([]);
   const [settings, setSettings] = useState<AdminSettings | null>(null);
   const [emailStatus, setEmailStatus] = useState<EmailStatus | null>(null);
@@ -72,16 +90,18 @@ export function AdminPage() {
   const [message, setMessage] = useState<string | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [lastInviteLink, setLastInviteLink] = useState<string | null>(null);
 
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [hh, st, us, audit, emailRes] = await Promise.all([
+      const [hh, st, us, audit, emailRes, invitesRes] = await Promise.all([
         api.adminHouseholds(),
         api.adminSettings(),
         api.adminUsers(),
         api.adminAudit({ limit: 30 }),
         api.adminEmailStatus(),
+        api.adminInvites(),
       ]);
       setHouseholds(hh.households);
       setSettings(st.settings);
@@ -92,6 +112,7 @@ export function AdminPage() {
         history_retention_years: st.settings.history_retention_years,
       });
       setUsers(us.users);
+      setPendingInvites(invitesRes.invites);
       setAuditEvents(audit.events);
       setEmailStatus(emailRes.email);
       const inviteTargets = hh.households.filter((h) => h.active && !h.is_worker_bee);
@@ -109,13 +130,49 @@ export function AdminPage() {
     e.preventDefault();
     setMessage(null);
     setError(null);
+    setLastInviteLink(null);
     try {
       const res = await api.inviteUser(email, householdId);
-      setMessage(`Invite sent to ${res.invite.email}.`);
+      setLastInviteLink(res.invite.invite_link);
+      if (emailStatus?.configured) {
+        setMessage(`Invite email sent to ${res.invite.email}.`);
+      } else {
+        setMessage(
+          `Invite created for ${res.invite.email}. Copy the link below and send it to them (email is not configured).`,
+        );
+      }
       setEmail("");
       await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Invite failed");
+    }
+  }
+
+  async function regenerateInvite(id: string) {
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      const res = await api.regenerateInviteLink(id);
+      setLastInviteLink(res.invite.invite_link);
+      if (emailStatus?.configured) {
+        setMessage(`New invite link emailed to ${res.invite.email}.`);
+      } else {
+        setMessage(`New invite link for ${res.invite.email} — copy below and send it to them.`);
+      }
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Could not regenerate link");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function copyInviteLink(link: string, label: string) {
+    const ok = await copyText(link);
+    if (ok) {
+      setMessage(`${label} copied to clipboard.`);
+    } else {
+      setError("Could not copy — select the link and copy manually.");
     }
   }
 
@@ -260,14 +317,25 @@ export function AdminPage() {
           Member households use the calendar and pick on their turn. Coordinator households can run
           periods and drafts — any active member inherits that access. Admin accounts manage cabin
           setup (login-specific). Mark up to three owning households as coordinator in Households
-          below.
+          below. New users join via an invite link — there is no open signup page.
         </p>
+
+        {emailStatus && !emailStatus.configured && (
+          <p className="text-xs text-amber-800 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-4">
+            Email is not configured — invite links are shown here for you to copy and send manually
+            (text, etc.). Configure SMTP under Email below when ready.
+          </p>
+        )}
 
         <form
           onSubmit={onInvite}
-          className="space-y-4 bg-white p-5 rounded-lg border border-slate-200 mb-6"
+          className="space-y-4 bg-white p-5 rounded-lg border border-slate-200 mb-4"
         >
           <h3 className="text-sm font-medium text-slate-800">Invite user</h3>
+          <p className="text-xs text-slate-500">
+            Creates an account for this email and assigns them to a household. They open the invite
+            link to choose a display name and password.
+          </p>
           <label className="block text-sm">
             <span className="text-slate-600">Email</span>
             <input
@@ -300,6 +368,60 @@ export function AdminPage() {
           </button>
         </form>
 
+        {lastInviteLink && (
+          <div className="mb-6 rounded-lg border border-slate-200 bg-slate-50 p-4 space-y-2">
+            <p className="text-sm font-medium text-slate-800">Invite link</p>
+            <p className="text-xs text-slate-500">Send this to the invitee. Valid for 7 days.</p>
+            <input
+              readOnly
+              value={lastInviteLink}
+              className="w-full text-xs rounded border border-slate-300 bg-white px-2 py-2 font-mono"
+              onFocus={(e) => e.target.select()}
+            />
+            <button
+              type="button"
+              onClick={() => void copyInviteLink(lastInviteLink, "Invite link")}
+              className="text-sm rounded border border-slate-300 bg-white px-3 py-1.5 hover:bg-slate-100"
+            >
+              Copy link
+            </button>
+          </div>
+        )}
+
+        {pendingInvites.length > 0 && (
+          <div className="mb-6 rounded-lg border border-slate-200 bg-white p-4">
+            <h3 className="text-sm font-medium text-slate-800 mb-2">Pending invites</h3>
+            <ul className="space-y-3">
+              {pendingInvites.map((inv) => (
+                <li
+                  key={inv.id}
+                  className="flex flex-wrap items-center justify-between gap-2 text-sm border-b border-slate-100 pb-3 last:border-0 last:pb-0"
+                >
+                  <div>
+                    <p className="font-medium text-slate-800">{inv.email}</p>
+                    <p className="text-xs text-slate-500">
+                      {inv.household_name} · expires{" "}
+                      {new Date(inv.expires_at).toLocaleDateString()}
+                    </p>
+                  </div>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void regenerateInvite(inv.id)}
+                    className="text-xs text-slate-600 underline hover:text-slate-900 disabled:opacity-40"
+                  >
+                    New link
+                  </button>
+                </li>
+              ))}
+            </ul>
+            <p className="text-xs text-slate-500 mt-3">
+              Use &quot;New link&quot; if the invite was lost. Previous links stop working.
+            </p>
+          </div>
+        )}
+
+        <h3 className="text-sm font-medium text-slate-800 mb-3">Active users</h3>
         <ul className="space-y-3">
           {users.map((u) => (
             <li

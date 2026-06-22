@@ -81,7 +81,8 @@ docker/       Entrypoint (migrate, seed, start)
 | `pnpm test` | API unit + integration tests |
 | `pnpm db:migrate:deploy` | Apply migrations (uses root `.env`) |
 | `pnpm db:migrate` | Create/apply migrations interactively (dev) |
-| `pnpm db:seed` | Seed admin + households + settings |
+| `pnpm db:seed` | Bootstrap: admin, households, settings |
+| `pnpm db:seed:demo` | Bootstrap + demo calendar (or set `SEED_DEMO=true`) |
 
 ## Phase status
 
@@ -98,4 +99,4 @@ docker/       Entrypoint (migrate, seed, start)
 
 Coordinator runbook: [docs/coordinator-runbook.md](./docs/coordinator-runbook.md)
 
-Re-seed to load demo data: `pnpm db:seed`
+Re-seed demo calendar data: `pnpm db:seed:demo`

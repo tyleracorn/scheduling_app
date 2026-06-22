@@ -13,6 +13,7 @@
     "db:migrate": "dotenv -e .env -- pnpm --filter @scheduling/api db:migrate",
     "db:migrate:deploy": "dotenv -e .env -- pnpm --filter @scheduling/api db:migrate:deploy",
     "db:seed": "dotenv -e .env -- pnpm --filter @scheduling/api db:seed",
+    "db:seed:demo": "dotenv -e .env -v SEED_DEMO=true -- pnpm --filter @scheduling/api db:seed",
     "db:studio": "pnpm --filter @scheduling/api db:studio"
   },
   "engines": {
