@@ -6,6 +6,7 @@ import { parseDateString, toDateString } from "../lib/dates.js";
 import { retentionCutoffDate } from "../lib/retention.js";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../plugins/auth.js";
+import { DEFAULT_CATEGORY_COLOR } from "../lib/note-category.js";
 
 const dateRangeSchema = z.object({
   start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -34,7 +35,7 @@ function formatNote(note: {
   body: string;
   categoryId: string | null;
   household: { name: string };
-  category: { id: string; name: string; slug: string } | null;
+  category: { id: string; name: string; slug: string; color: string } | null;
 }) {
   return {
     id: note.id,
@@ -46,6 +47,7 @@ function formatNote(note: {
     category_id: note.categoryId,
     category_name: note.category?.name ?? "General",
     category_slug: note.category?.slug ?? "general",
+    category_color: note.category?.color ?? DEFAULT_CATEGORY_COLOR,
   };
 }
 
@@ -61,6 +63,7 @@ async function notesRoutes(app: FastifyInstance) {
         id: c.id,
         name: c.name,
         slug: c.slug,
+        color: c.color,
         sort_order: c.sortOrder,
       })),
     };

@@ -1,6 +1,7 @@
 import type { PeriodStatus, Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { parseDateString, toDateString } from "../lib/dates.js";
+import { DEFAULT_CATEGORY_COLOR } from "../lib/note-category.js";
 import { retentionCutoffDate } from "../lib/retention.js";
 
 export type CalendarQuery = { start: string; end: string };
@@ -102,6 +103,7 @@ export async function getCalendarAggregate(query: CalendarQuery) {
       category_id: n.categoryId,
       category_name: n.category?.name ?? "General",
       category_slug: n.category?.slug ?? "general",
+      category_color: n.category?.color ?? DEFAULT_CATEGORY_COLOR,
     })),
     occupancy: occupancy.map((o) => ({
       id: o.id,

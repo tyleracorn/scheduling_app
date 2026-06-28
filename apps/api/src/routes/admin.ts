@@ -16,6 +16,11 @@ import {
   pickWarningLeadHoursFromDays,
   pickWindowHoursFromDays,
 } from "../lib/settings-format.js";
+import {
+  DEFAULT_CATEGORY_COLOR,
+  formatNoteCategory,
+  uniqueCategorySlug,
+} from "../lib/note-category.js";
 
 const householdSchema = z.object({
   name: z.string().min(1).max(100),
@@ -354,7 +359,16 @@ export async function adminRoutes(app: FastifyInstance) {
 
   const noteCategorySchema = z.object({
     name: z.string().min(1).max(80),
-    slug: z.string().min(1).max(80).regex(/^[a-z0-9_-]+$/),
+    slug: z
+      .string()
+      .min(1)
+      .max(80)
+      .regex(/^[a-z0-9_-]+$/)
+      .optional(),
+    color: z
+      .string()
+      .regex(/^#[0-9A-Fa-f]{6}$/)
+      .optional(),
     active: z.boolean().optional(),
     sort_order: z.number().int().min(0).optional(),
   });
@@ -362,13 +376,7 @@ export async function adminRoutes(app: FastifyInstance) {
   app.get("/api/v1/admin/note-categories", async () => {
     const categories = await prisma.noteCategory.findMany({ orderBy: { sortOrder: "asc" } });
     return {
-      categories: categories.map((c) => ({
-        id: c.id,
-        name: c.name,
-        slug: c.slug,
-        active: c.active,
-        sort_order: c.sortOrder,
-      })),
+      categories: categories.map(formatNoteCategory),
     };
   });
 
@@ -377,23 +385,23 @@ export async function adminRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       throw new AppError(400, "validation_error", "Invalid category", parsed.error.flatten());
     }
+    const slug = parsed.data.slug ?? (await uniqueCategorySlug(parsed.data.name));
+    if (parsed.data.slug) {
+      const taken = await prisma.noteCategory.findUnique({ where: { slug } });
+      if (taken) {
+        throw new AppError(409, "duplicate_slug", "A category with that slug already exists");
+      }
+    }
     const cat = await prisma.noteCategory.create({
       data: {
         name: parsed.data.name,
-        slug: parsed.data.slug,
+        slug,
+        color: parsed.data.color ?? DEFAULT_CATEGORY_COLOR,
         active: parsed.data.active ?? true,
         sortOrder: parsed.data.sort_order ?? 0,
       },
     });
-    return {
-      category: {
-        id: cat.id,
-        name: cat.name,
-        slug: cat.slug,
-        active: cat.active,
-        sort_order: cat.sortOrder,
-      },
-    };
+    return { category: formatNoteCategory(cat) };
   });
 
   app.patch("/api/v1/admin/note-categories/:id", async (request) => {
@@ -402,24 +410,32 @@ export async function adminRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       throw new AppError(400, "validation_error", "Invalid category", parsed.error.flatten());
     }
+    const existing = await prisma.noteCategory.findUnique({ where: { id } });
+    if (!existing) {
+      throw new AppError(404, "not_found", "Category not found");
+    }
+    let slug = parsed.data.slug;
+    if (parsed.data.name && !slug) {
+      slug = await uniqueCategorySlug(parsed.data.name, id);
+    } else if (slug) {
+      const taken = await prisma.noteCategory.findFirst({
+        where: { slug, NOT: { id } },
+      });
+      if (taken) {
+        throw new AppError(409, "duplicate_slug", "A category with that slug already exists");
+      }
+    }
     const cat = await prisma.noteCategory.update({
       where: { id },
       data: {
         name: parsed.data.name,
-        slug: parsed.data.slug,
+        slug,
+        color: parsed.data.color,
         active: parsed.data.active,
         sortOrder: parsed.data.sort_order,
       },
     });
-    return {
-      category: {
-        id: cat.id,
-        name: cat.name,
-        slug: cat.slug,
-        active: cat.active,
-        sort_order: cat.sortOrder,
-      },
-    };
+    return { category: formatNoteCategory(cat) };
   });
 
   app.get("/api/v1/admin/email/status", async () => {
