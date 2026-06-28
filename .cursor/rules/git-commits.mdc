@@ -1,0 +1,56 @@
+---
+description: When and how to create git commits during agent work in this repo
+alwaysApply: true
+---
+
+# Git Commits
+
+Create git commits during implementation work when they represent a coherent, reviewable unit of progress. Do not wait for the user to say "commit" if they are actively building features and commits would help.
+
+## When to Commit
+
+- After a logical chunk is done (e.g. backend API + migration, then frontend UI, then docs)
+- After a bug fix that stands alone
+- Before switching to an unrelated area of the codebase
+- When the user says "commit", "save progress", or similar
+
+## When NOT to Commit
+
+- Mid-change with broken typecheck or tests (unless fixing that is the very next step in the same commit)
+- Mixing unrelated refactors with feature work in one commit
+- Files that likely contain secrets (`.env`, credentials.json, etc.) — warn the user if they ask to commit those
+
+## Commit Size
+
+Prefer small, focused commits over one large dump at the end of a session. Commit after each logical chunk without asking, unless the user said not to.
+
+## Git Safety Protocol
+
+- NEVER update git config
+- NEVER run destructive or irreversible git commands (push --force, hard reset, etc.) unless the user explicitly requests them
+- NEVER skip hooks (`--no-verify`, `--no-gpg-sign`, etc.) unless the user explicitly requests it
+- NEVER force push to main/master — warn the user if they request it
+- Avoid `git commit --amend`. ONLY use `--amend` when ALL conditions are met:
+  1. User explicitly requested amend, OR commit succeeded but pre-commit hook auto-modified files that need including
+  2. HEAD commit was created by you in this conversation (verify: `git log -1 --format='%an %ae'`)
+  3. Commit has NOT been pushed to remote (verify: git status shows "Your branch is ahead")
+- CRITICAL: If commit FAILED or was REJECTED by hook, NEVER amend — fix the issue and create a NEW commit
+- CRITICAL: If you already pushed to remote, NEVER amend unless the user explicitly requests it
+- Do not push to the remote unless the user explicitly asks
+
+## Commit Workflow
+
+1. Run these in parallel:
+   - `git status` — untracked and modified files
+   - `git diff` — staged and unstaged changes
+   - `git log -1 --oneline` — recent message style
+2. Stage only relevant files. Draft a concise 1–2 sentence message focused on **why**, not just what.
+3. Commit. On Windows PowerShell use:
+   ```powershell
+   git commit -m "Short title." -m "Optional body with why and context."
+   ```
+   Do not use bash heredocs (`<<'EOF'`) — they fail in PowerShell.
+4. Run `git status` after the commit to verify success.
+5. If a pre-commit hook fails, fix the issue and create a **new** commit (do not amend a failed commit).
+
+If there are no changes to commit, do not create an empty commit.
