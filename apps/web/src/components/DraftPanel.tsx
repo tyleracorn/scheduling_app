@@ -3,6 +3,7 @@ import { api } from "../lib/api";
 import type { AuthUser } from "../lib/api";
 import type { CalendarNote, CalendarPeriod } from "../lib/calendar-types";
 import type { DraftState } from "../lib/period-types";
+import { submitDraftWeekPick } from "../lib/draft-pick-actions";
 import {
   defaultOccupancyPick,
   occupancyPickToApi,
@@ -159,11 +160,14 @@ export function DraftPanel({
     <div className={panelClass}>
       <h2 className="font-semibold text-base mb-2">Pick your weeks — {draft.period_name}</h2>
       {!embedded && (
-        <p className="mb-3 text-indigo-800">
-          Choose a week, then confirm your pick or skip. You can change your selection before
-          confirming, or revise a confirmed pick to another open week (or release it) while picking is
-          still open.
-        </p>
+        <>
+          <p className="mb-2 text-indigo-800">
+            Click an open week on the calendar, or choose below. Set sharing, then confirm.
+          </p>
+          <p className="text-xs text-indigo-700 mb-3">
+            Tap a day in the month grid to pick a week and set green/red sharing in one step.
+          </p>
+        </>
       )}
 
       {error && (
@@ -186,20 +190,22 @@ export function DraftPanel({
               Deadline: {new Date(turn.expires_at).toLocaleString()}
             </span>
           )}
-          {hasPendingPick && turn.pending_week && (
-            <span className="block text-indigo-900 mt-1 font-medium">
-              Selected: {turn.pending_week.week_start_date} – {turn.pending_week.week_end_date}
-            </span>
-          )}
         </p>
       ) : (
         <p className="mb-3">No active turn — draft may be finishing.</p>
       )}
 
+      {canAct && turn && hasPendingPick && turn.pending_week && (
+        <p className="mb-3 text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded px-2 py-1.5">
+          You selected {turn.pending_week.week_start_date} – {turn.pending_week.week_end_date}. Choose
+          sharing and confirm to finish your turn.
+        </p>
+      )}
+
       {canAct && turn && (
         <div className="flex flex-wrap items-end gap-3 mb-3">
           <label className="flex flex-col gap-1">
-            <span className="text-xs font-medium">{hasPendingPick ? "Change week" : "Pick a week"}</span>
+            <span className="text-xs font-medium">Pick a week</span>
             <select
               value={selectedWeek}
               onChange={(e) => setSelectedWeek(e.target.value)}
@@ -213,55 +219,36 @@ export function DraftPanel({
               ))}
             </select>
           </label>
+          <OccupancyChoice
+            value={pickOccupancy}
+            onChange={setPickOccupancy}
+            scopeLabel="for this week"
+            compact
+          />
           {weekNotes.length > 0 && (
             <div className="w-full text-xs text-orange-900 bg-orange-50 border border-orange-200 rounded px-2 py-1.5">
               <strong>Away notes this week:</strong>{" "}
               {weekNotes.map((n) => `${n.household_name}: ${n.body}`).join(" · ")}
             </div>
           )}
-          {!hasPendingPick ? (
-            <button
-              type="button"
-              disabled={busy || !selectedWeek}
-              onClick={() =>
-                void run(() => api.pickWeek(period.id, turn.id, selectedWeek))
-              }
-              className="rounded bg-indigo-600 px-3 py-1.5 text-white hover:bg-indigo-700 disabled:opacity-50"
-            >
-              Pick week
-            </button>
-          ) : (
-            <>
-              <OccupancyChoice
-                value={pickOccupancy}
-                onChange={setPickOccupancy}
-                scopeLabel="for this week"
-                compact
-              />
-              <button
-                type="button"
-                disabled={busy || !selectedWeek || selectedWeek === turn.period_week_id}
-                onClick={() =>
-                  void run(() => api.changePick(period.id, turn.id, selectedWeek))
-                }
-                className="rounded border border-indigo-500 px-3 py-1.5 hover:bg-indigo-100 disabled:opacity-50"
-              >
-                Change pick
-              </button>
-              <button
-                type="button"
-                disabled={busy}
-                onClick={() =>
-                  void run(() =>
-                    api.confirmPick(period.id, turn.id, occupancyApi(pickOccupancy)),
-                  )
-                }
-                className="rounded bg-indigo-600 px-3 py-1.5 text-white hover:bg-indigo-700 disabled:opacity-50"
-              >
-                Confirm pick
-              </button>
-            </>
-          )}
+          <button
+            type="button"
+            disabled={busy || !selectedWeek}
+            onClick={() =>
+              void run(() =>
+                submitDraftWeekPick({
+                  periodId: period.id,
+                  turnId: turn.id,
+                  periodWeekId: selectedWeek,
+                  occupancy: pickOccupancy,
+                  pendingWeekId: turn.period_week_id,
+                }),
+              )
+            }
+            className="rounded bg-indigo-600 px-3 py-1.5 text-white hover:bg-indigo-700 disabled:opacity-50"
+          >
+            Confirm week
+          </button>
           <button
             type="button"
             disabled={busy}

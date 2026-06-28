@@ -144,7 +144,7 @@ export function MonthCalendar({ year, month, weeks, notes, occupancy, onSelectDa
                     </div>
                   )}
                   {unassigned && week.period_status === "draft" && dayAssignments.length === 0 && (
-                    <div className="rounded px-1 py-0.5 text-[10px] border border-dashed border-indigo-300 text-indigo-600">
+                    <div className="rounded px-1 py-0.5 text-[10px] bg-indigo-50 text-indigo-700">
                       Pick
                     </div>
                   )}

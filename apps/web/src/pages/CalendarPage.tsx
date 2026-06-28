@@ -134,8 +134,6 @@ export function CalendarPage() {
       .filter((a): a is { period: (typeof a)["period"]; message: string } => a.message != null);
   }, [data, user]);
 
-  const hasDraftPeriod = data?.periods.some((p) => p.status === "draft") ?? false;
-
   const selectedDate = selected ? new Date(selected.date + "T12:00:00Z") : null;
   const drawerNotes = selectedDate ? notesForDay(selectedDate, notes) : [];
   const drawerOccupancy = selectedDate ? occupancyForDay(selectedDate, occupancy) : [];
@@ -297,7 +295,6 @@ export function CalendarPage() {
           onClose={() => setSelected(null)}
           onChanged={refreshAll}
           draftRefreshToken={draftRefresh}
-          draftPanelVisible={hasDraftPeriod}
         />
       )}
     </div>

@@ -16,15 +16,15 @@ Quick reference for scheduling coordinators.
 2. **Generate periods** — Periods → Generate periods.
 3. **Open** — Periods auto-open at `opening_at` (scheduler). Households can add notes.
 4. **Start draft** — Periods → Start draft when ready.
-5. **Draft** — Households pick/skip in the **Period activity** panel beside the calendar (desktop) or below the calendar (mobile). On hold after 2 consecutive auto-skips.
+5. **Draft** — Households pick on the calendar (click an open week) or in **Period activity** beside the calendar. Choose sharing (green/red/none), then **Confirm week** in one step. On hold after 2 consecutive auto-skips.
 6. **Assignment** — After draft, assign remaining weeks on the calendar (click unassigned days).
 7. **Publish** — Period activity panel → Publish when all weeks assigned.
 
 ## Calendar layout
 
 - **Calendar grid** is the main view; month navigation stays at the top.
-- **Period activity** sidebar holds pick/assign/swap controls for each season.
-- **Click a day** to open the drawer for notes, sharing (green/red), and coordinator assign/reassign.
+- **Period activity** sidebar holds pick/assign/swap controls for each season (alternate path during draft).
+- **Click a day** to open the drawer for draft picks, notes, sharing (green/red), and coordinator assign/reassign.
 - **Sticky alerts** at the top link to the relevant period panel when action is needed.
 
 ## Hold (2 consecutive auto-skips)
@@ -41,7 +41,7 @@ Quick reference for scheduling coordinators.
 
 ## Revise pick (during draft)
 
-- Households can change a confirmed pick to another open week, or release it, while the draft is still running — in Period activity or (when panel is hidden) via the day drawer.
+- Households can change a confirmed pick to another open week, or release it, while the draft is still running — in Period activity or via the day drawer.
 
 ## Worker Bee
 

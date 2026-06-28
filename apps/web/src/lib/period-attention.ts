@@ -33,7 +33,7 @@ export function getPeriodAttentionMessage(
       return `${period.name}: Coordinator action needed`;
     }
     if (summary?.active_turn?.household_id === user.householdId) {
-      return `${period.name}: Your turn to pick a week`;
+      return `${period.name}: Your turn — click an open week or use Period activity`;
     }
     if (summary?.active_turn) {
       return `${period.name}: Waiting for ${summary.active_turn.household_name}`;

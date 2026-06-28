@@ -3,6 +3,7 @@ import { api } from "../lib/api";
 import type { AuthUser } from "../lib/api";
 import type { CalendarNote, CalendarWeek, OccupancyIndicator } from "../lib/calendar-types";
 import type { DraftState } from "../lib/period-types";
+import { submitDraftWeekPick } from "../lib/draft-pick-actions";
 import {
   defaultOccupancyPick,
   occupancyPickToApi,
@@ -27,7 +28,6 @@ type Props = {
   onClose: () => void;
   onChanged: () => void;
   draftRefreshToken?: number;
-  draftPanelVisible?: boolean;
 };
 
 function findPickTurnForWeek(draft: DraftState, periodWeekId: string) {
@@ -51,7 +51,6 @@ export function DayDetailDrawer({
   onClose,
   onChanged,
   draftRefreshToken,
-  draftPanelVisible = false,
 }: Props) {
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
@@ -63,6 +62,7 @@ export function DayDetailDrawer({
   const [noteCategoryId, setNoteCategoryId] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [reviseWeek, setReviseWeek] = useState("");
+  const [draftPickWeekId, setDraftPickWeekId] = useState("");
   const [pickOccupancy, setPickOccupancy] = useState<OccupancyPick>(() => defaultOccupancyPick());
   const [assignOccupancy, setAssignOccupancy] = useState<OccupancyPick>(() => defaultOccupancyPick());
   const [reviseOccupancy, setReviseOccupancy] = useState<OccupancyPick>(() => defaultOccupancyPick());
@@ -102,6 +102,38 @@ export function DayDetailDrawer({
   const isPublished = assignWeek?.period_status === "published";
   const isUnassigned = assignWeek && !assignWeek.assignment;
   const isDraftWeek = week?.period_status === "draft";
+  const isDraftWeekUnassigned = !!(week && isDraftWeek && !week.assignment);
+
+  const draftPickableWeeks = useMemo(() => {
+    if (!draft) return [];
+    return coveringWeeks.filter(
+      (w) =>
+        w.period_status === "draft" &&
+        !w.assignment &&
+        draft.available_weeks.some((aw) => aw.period_week_id === w.period_week_id),
+    );
+  }, [coveringWeeks, draft]);
+
+  const draftPickWeek = useMemo(() => {
+    if (draftPickWeekId) {
+      return draftPickableWeeks.find((w) => w.period_week_id === draftPickWeekId) ?? week;
+    }
+    return draftPickableWeeks.find((w) => w.period_week_id === week?.period_week_id) ?? draftPickableWeeks[0] ?? week;
+  }, [draftPickWeekId, draftPickableWeeks, week]);
+
+  useEffect(() => {
+    const preferred =
+      week && draftPickableWeeks.some((w) => w.period_week_id === week.period_week_id)
+        ? week.period_week_id
+        : (draftPickableWeeks[0]?.period_week_id ?? week?.period_week_id ?? "");
+    setDraftPickWeekId(preferred);
+  }, [date, week, draftPickableWeeks]);
+
+  const isWeekAvailableForPick = !!(
+    draft &&
+    draftPickWeek &&
+    draft.available_weeks.some((w) => w.period_week_id === draftPickWeek.period_week_id)
+  );
 
   const activeTurn = draft?.active_turn ?? null;
   const isMyActiveTurn =
@@ -110,6 +142,24 @@ export function DayDetailDrawer({
   const canRevisePick =
     !!pickTurn &&
     (isCoordinator || (householdId != null && pickTurn.household_id === householdId));
+  const canPickThisWeek =
+    isDraftWeekUnassigned && isMyActiveTurn && activeTurn && isWeekAvailableForPick;
+  const canCoordinatorPickThisWeek =
+    isDraftWeekUnassigned &&
+    isCoordinator &&
+    activeTurn &&
+    !isMyActiveTurn &&
+    !draft?.on_hold &&
+    isWeekAvailableForPick;
+  const showDraftWaitingInfo =
+    isDraftWeek &&
+    week &&
+    isDraftWeekUnassigned &&
+    !canPickThisWeek &&
+    !canCoordinatorPickThisWeek &&
+    !canRevisePick &&
+    draft &&
+    activeTurn;
   const reviseOptions =
     pickTurn && draft
       ? [
@@ -249,20 +299,17 @@ export function DayDetailDrawer({
   }
 
   async function pickAndConfirmThisWeek() {
-    if (!week || !activeTurn || !draft) return;
+    if (!draftPickWeek || !activeTurn || !draft) return;
     setBusy(true);
     setError(null);
-    const occ = occupancyPickToApi(pickOccupancy);
     try {
-      if (activeTurn.pending_pick && activeTurn.period_week_id === week.period_week_id) {
-        await api.confirmPick(week.period_id, activeTurn.id, occ);
-      } else if (activeTurn.pending_pick) {
-        await api.changePick(week.period_id, activeTurn.id, week.period_week_id);
-        await api.confirmPick(week.period_id, activeTurn.id, occ);
-      } else {
-        await api.pickWeek(week.period_id, activeTurn.id, week.period_week_id);
-        await api.confirmPick(week.period_id, activeTurn.id, occ);
-      }
+      await submitDraftWeekPick({
+        periodId: draftPickWeek.period_id,
+        turnId: activeTurn.id,
+        periodWeekId: draftPickWeek.period_week_id,
+        occupancy: pickOccupancy,
+        pendingWeekId: activeTurn.period_week_id,
+      });
       onChanged();
       onClose();
     } catch (err) {
@@ -273,14 +320,14 @@ export function DayDetailDrawer({
   }
 
   async function coordinatorPickThisWeek() {
-    if (!week || !activeTurn) return;
+    if (!draftPickWeek || !activeTurn) return;
     setBusy(true);
     setError(null);
     try {
       await api.coordinatorPick(
-        week.period_id,
+        draftPickWeek.period_id,
         activeTurn.id,
-        week.period_week_id,
+        draftPickWeek.period_week_id,
         occupancyPickToApi(pickOccupancy),
       );
       onChanged();
@@ -378,18 +425,34 @@ export function DayDetailDrawer({
           </dl>
         )}
 
-        {isDraftWeek && week && draftPanelVisible && (
-          <section className="mb-4 pb-4 border-b border-indigo-200">
-            <p className="text-sm text-indigo-900">
-              Week picking is in the <strong>Period activity</strong> panel beside the calendar. Use
-              this drawer to view day details and add notes.
-            </p>
-          </section>
-        )}
-
-        {isDraftWeek && week && isUnassigned && isMyActiveTurn && activeTurn && !draftPanelVisible && (
+        {canPickThisWeek && activeTurn && (
           <section className="mb-4 pb-4 border-b border-indigo-200">
             <h3 className="text-sm font-medium text-indigo-900 mb-2">Draft — your turn</h3>
+            {activeTurn.pending_pick && activeTurn.pending_week && (
+              <p className="text-xs text-amber-900 bg-amber-50 border border-amber-200 rounded px-2 py-1.5 mb-2">
+                You selected {activeTurn.pending_week.week_start_date} –{" "}
+                {activeTurn.pending_week.week_end_date}. Choose sharing and confirm to finish your turn.
+              </p>
+            )}
+            {draftPickableWeeks.length > 1 && (
+              <label className="block text-sm mb-2">
+                Which scheduling week?
+                <span className="block text-xs font-normal text-indigo-700 mt-0.5 mb-1">
+                  This day is a handoff between two weeks — choose which week to pick.
+                </span>
+                <select
+                  value={draftPickWeekId}
+                  onChange={(e) => setDraftPickWeekId(e.target.value)}
+                  className="mt-1 w-full rounded border border-indigo-300 px-2 py-1.5 bg-white"
+                >
+                  {draftPickableWeeks.map((w) => (
+                    <option key={w.period_week_id} value={w.period_week_id}>
+                      {w.week_start_date} – {w.week_end_date} ({w.period_name})
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <p className="text-xs text-indigo-800 mb-2">
               Pick this scheduling week for your household.
             </p>
@@ -403,18 +466,32 @@ export function DayDetailDrawer({
               type="button"
               disabled={busy}
               onClick={() => void pickAndConfirmThisWeek()}
-              className="rounded bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-700 disabled:opacity-50"
+              className="rounded bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-700 disabled:opacity-50 mt-2"
             >
-              {activeTurn.pending_pick && activeTurn.period_week_id === week.period_week_id
-                ? "Confirm this week"
-                : "Pick this week"}
+              Confirm week
             </button>
           </section>
         )}
 
-        {isDraftWeek && week && isUnassigned && isCoordinator && activeTurn && !isMyActiveTurn && !draft?.on_hold && !draftPanelVisible && (
+        {canCoordinatorPickThisWeek && activeTurn && (
           <section className="mb-4 pb-4 border-b border-indigo-200">
             <h3 className="text-sm font-medium text-indigo-900 mb-2">Draft — coordinator</h3>
+            {draftPickableWeeks.length > 1 && (
+              <label className="block text-sm mb-2">
+                Which scheduling week?
+                <select
+                  value={draftPickWeekId}
+                  onChange={(e) => setDraftPickWeekId(e.target.value)}
+                  className="mt-1 w-full rounded border border-indigo-300 px-2 py-1.5 bg-white"
+                >
+                  {draftPickableWeeks.map((w) => (
+                    <option key={w.period_week_id} value={w.period_week_id}>
+                      {w.week_start_date} – {w.week_end_date} ({w.period_name})
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <p className="text-xs text-indigo-800 mb-2">
               Pick this week for <strong>{activeTurn.household_name}</strong> (active turn).
             </p>
@@ -428,14 +505,14 @@ export function DayDetailDrawer({
               type="button"
               disabled={busy}
               onClick={() => void coordinatorPickThisWeek()}
-              className="rounded border border-indigo-500 px-3 py-1.5 text-sm hover:bg-indigo-50 disabled:opacity-50"
+              className="rounded border border-indigo-500 px-3 py-1.5 text-sm hover:bg-indigo-50 disabled:opacity-50 mt-2"
             >
               Pick for {activeTurn.household_name}
             </button>
           </section>
         )}
 
-        {isDraftWeek && week && canRevisePick && pickTurn && !draftPanelVisible && (
+        {canRevisePick && pickTurn && (
           <section className="mb-4 pb-4 border-b border-indigo-200">
             <h3 className="text-sm font-medium text-indigo-900 mb-2">
               {pickTurn.household_id === householdId ? "Your pick" : `${pickTurn.household_name}'s pick`}
@@ -482,6 +559,16 @@ export function DayDetailDrawer({
                 Release pick
               </button>
             </div>
+          </section>
+        )}
+
+        {showDraftWaitingInfo && activeTurn && (
+          <section className="mb-4 pb-4 border-b border-indigo-200">
+            <p className="text-sm text-indigo-900">
+              {isMyActiveTurn && !isWeekAvailableForPick
+                ? "This week isn't available to pick."
+                : `Waiting for ${activeTurn.household_name} to pick a week.`}
+            </p>
           </section>
         )}
 
