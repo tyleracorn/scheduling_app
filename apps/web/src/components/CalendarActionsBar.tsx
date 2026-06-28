@@ -2,6 +2,7 @@ import { FormEvent, useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import { getAutoOccupancyStatus, type OccupancyStatus } from "../lib/preferences";
+import { NoteCategorySelect } from "./NoteCategorySelect";
 
 type Props = {
   householdId: string | null;
@@ -44,6 +45,7 @@ export function CalendarActionsBar({
     defaultRangeDate(selectedDate, visibleMonthStart, visibleMonthEnd),
   );
   const [noteBody, setNoteBody] = useState("");
+  const [noteCategoryId, setNoteCategoryId] = useState<string | null>(null);
   const [occStart, setOccStart] = useState(() =>
     defaultRangeDate(selectedDate, visibleMonthStart, visibleMonthEnd),
   );
@@ -88,8 +90,10 @@ export function CalendarActionsBar({
         start_date: startDate,
         end_date: endDate,
         body: noteBody.trim(),
+        category_id: noteCategoryId,
       });
       setNoteBody("");
+      setNoteCategoryId(null);
       onNoteSaved();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add note");
@@ -188,6 +192,11 @@ export function CalendarActionsBar({
               />
             </label>
           </div>
+          <NoteCategorySelect
+            value={noteCategoryId}
+            onChange={setNoteCategoryId}
+            disabled={busy}
+          />
           <label className="block text-sm text-slate-600">
             Note
             <textarea

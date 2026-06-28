@@ -291,12 +291,29 @@ export const api = {
     }),
   calendar: (start: string, end: string) =>
     request<CalendarResponse>(`/api/v1/calendar?start=${start}&end=${end}`),
-  createNote: (data: { start_date: string; end_date: string; body: string }) =>
+  noteCategories: () =>
+    request<{
+      categories: { id: string; name: string; slug: string; color: string; sort_order: number }[];
+    }>("/api/v1/note-categories"),
+  createNote: (data: {
+    start_date: string;
+    end_date: string;
+    body: string;
+    category_id?: string | null;
+  }) =>
     request<{ note: CalendarNote }>("/api/v1/notes", {
       method: "POST",
       body: JSON.stringify(data),
     }),
-  updateNote: (id: string, data: { start_date: string; end_date: string; body: string }) =>
+  updateNote: (
+    id: string,
+    data: {
+      start_date: string;
+      end_date: string;
+      body: string;
+      category_id?: string | null;
+    },
+  ) =>
     request<{ note: CalendarNote }>(`/api/v1/notes/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),

@@ -11,6 +11,7 @@ import {
 import { textColorForBackground } from "../lib/calendar-utils";
 import { OccupancyChoice } from "./OccupancyChoice";
 import { OccupancyDisclaimer } from "./OccupancyDisclaimer";
+import { NoteCategorySelect } from "./NoteCategorySelect";
 
 type Household = { id: string; name: string; color: string; is_worker_bee?: boolean };
 
@@ -59,6 +60,7 @@ export function DayDetailDrawer({
   const [assignWeekId, setAssignWeekId] = useState("");
   const [reassignReason, setReassignReason] = useState("");
   const [noteBody, setNoteBody] = useState("");
+  const [noteCategoryId, setNoteCategoryId] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [reviseWeek, setReviseWeek] = useState("");
   const [pickOccupancy, setPickOccupancy] = useState<OccupancyPick>(() => defaultOccupancyPick());
@@ -157,6 +159,24 @@ export function DayDetailDrawer({
     return occupancyPickForRevise(pick);
   }
 
+  async function changeNoteCategory(note: CalendarNote, categoryId: string | null) {
+    setBusy(true);
+    setError(null);
+    try {
+      await api.updateNote(note.id, {
+        start_date: note.start_date,
+        end_date: note.end_date,
+        body: note.body,
+        category_id: categoryId,
+      });
+      onChanged();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Failed to update category");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function removeNote(id: string) {
     setBusy(true);
     try {
@@ -212,8 +232,14 @@ export function DayDetailDrawer({
     setBusy(true);
     setError(null);
     try {
-      await api.createNote({ start_date: date, end_date: date, body: noteBody.trim() });
+      await api.createNote({
+        start_date: date,
+        end_date: date,
+        body: noteBody.trim(),
+        category_id: noteCategoryId,
+      });
       setNoteBody("");
+      setNoteCategoryId(null);
       onChanged();
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to add note");
@@ -571,6 +597,12 @@ export function DayDetailDrawer({
           <section className="mb-6 pb-4 border-b border-slate-200">
             <h3 className="text-sm font-medium text-slate-800 mb-2">Add a note for this day</h3>
             <form onSubmit={addDayNote} className="space-y-2">
+              <NoteCategorySelect
+                value={noteCategoryId}
+                onChange={setNoteCategoryId}
+                disabled={busy}
+                compact
+              />
               <textarea
                 value={noteBody}
                 onChange={(e) => setNoteBody(e.target.value)}
@@ -624,14 +656,22 @@ export function DayDetailDrawer({
                   </p>
                 )}
                 {householdId === n.household_id && (
-                  <button
-                    type="button"
-                    disabled={busy}
-                    onClick={() => void removeNote(n.id)}
-                    className="text-xs text-red-600 mt-2 hover:underline"
-                  >
-                    Delete
-                  </button>
+                  <div className="mt-2 flex flex-wrap items-end gap-2">
+                    <NoteCategorySelect
+                      value={n.category_id}
+                      onChange={(categoryId) => void changeNoteCategory(n, categoryId)}
+                      disabled={busy}
+                      compact
+                    />
+                    <button
+                      type="button"
+                      disabled={busy}
+                      onClick={() => void removeNote(n.id)}
+                      className="text-xs text-red-600 hover:underline"
+                    >
+                      Delete
+                    </button>
+                  </div>
                 )}
               </li>
             ))}
