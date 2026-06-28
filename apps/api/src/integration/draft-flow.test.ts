@@ -48,7 +48,7 @@ async function createFixture(): Promise<Fixture> {
         name: `${tag}-H${i}`,
         color: "#2563EB",
         isWorkerBee: false,
-        isCoordinator: i === 1,
+        authority: i === 1 ? "coordinator" : "active",
       },
     });
     const u = await prisma.user.create({

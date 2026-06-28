@@ -24,6 +24,7 @@ cp .env.example .env
 
 docker compose -f docker-compose.dev.yml up -d
 
+Set-ExecutionPolicy -Scope CurrentUser RemoteSigned
 pnpm install
 pnpm db:generate
 pnpm db:migrate:deploy
@@ -38,8 +39,8 @@ Always run database commands from the **repo root** so `DATABASE_URL` from `.env
 pnpm dev
 ```
 
-- Web: http://localhost:5173  
-- API: http://localhost:3000  
+- Web: http://localhost:5173
+- API: http://localhost:3000
 - Default admin: `admin@example.com` / `changeme` (from `.env`)
 
 ### Production (NAS / Docker)

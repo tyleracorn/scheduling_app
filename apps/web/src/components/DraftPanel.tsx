@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
 import type { AuthUser } from "../lib/api";
-import type { CalendarPeriod } from "../lib/calendar-types";
+import type { CalendarNote, CalendarPeriod } from "../lib/calendar-types";
 import type { DraftState } from "../lib/period-types";
 import {
   defaultOccupancyPick,
@@ -49,6 +49,9 @@ export function DraftPanel({
   const [pickOccupancy, setPickOccupancy] = useState<OccupancyPick>(() => defaultOccupancyPick());
   const [reviseOccupancy, setReviseOccupancy] = useState<OccupancyPick>(() => defaultOccupancyPick());
   const [coordOccupancy, setCoordOccupancy] = useState<OccupancyPick>(() => defaultOccupancyPick());
+  const [weekNotes, setWeekNotes] = useState<CalendarNote[]>([]);
+
+  const selectedWeekMeta = draft?.available_weeks.find((w) => w.period_week_id === selectedWeek);
 
   const load = useCallback(async () => {
     if (period.status !== "draft") {
@@ -75,6 +78,23 @@ export function DraftPanel({
   useEffect(() => {
     void load();
   }, [load]);
+
+  useEffect(() => {
+    if (!selectedWeekMeta) {
+      setWeekNotes([]);
+      return;
+    }
+    api
+      .calendar(selectedWeekMeta.week_start_date, selectedWeekMeta.week_end_date)
+      .then((res) =>
+        setWeekNotes(
+          res.notes.filter(
+            (n) => n.category_slug === "away" || n.category_name.toLowerCase() === "away",
+          ),
+        ),
+      )
+      .catch(() => setWeekNotes([]));
+  }, [selectedWeekMeta?.week_start_date, selectedWeekMeta?.week_end_date, selectedWeek]);
 
   function occupancyPickForRevise(pick: OccupancyPick): "green" | "red" | null {
     if (pick === "none") return null;
@@ -193,6 +213,12 @@ export function DraftPanel({
               ))}
             </select>
           </label>
+          {weekNotes.length > 0 && (
+            <div className="w-full text-xs text-orange-900 bg-orange-50 border border-orange-200 rounded px-2 py-1.5">
+              <strong>Away notes this week:</strong>{" "}
+              {weekNotes.map((n) => `${n.household_name}: ${n.body}`).join(" · ")}
+            </div>
+          )}
           {!hasPendingPick ? (
             <button
               type="button"

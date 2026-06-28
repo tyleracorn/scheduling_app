@@ -1,6 +1,5 @@
 import { FormEvent, useCallback, useEffect, useState } from "react";
-import { api } from "../lib/api";
-import type { AdminSettings } from "../lib/api";
+import { api, type AdminSettings, type HouseholdAuthority, type NoteCategory } from "../lib/api";
 
 type Household = {
   id: string;
@@ -9,6 +8,7 @@ type Household = {
   active: boolean;
   is_worker_bee: boolean;
   is_coordinator: boolean;
+  authority: HouseholdAuthority;
 };
 
 type AdminUser = {
@@ -61,6 +61,7 @@ async function copyText(text: string): Promise<boolean> {
 const SECTIONS = [
   { id: "people", label: "People" },
   { id: "households", label: "Households" },
+  { id: "notes", label: "Note categories" },
   { id: "system", label: "System" },
   { id: "email", label: "Email" },
   { id: "audit", label: "Audit" },
@@ -84,7 +85,11 @@ export function AdminPage() {
     pick_window_days: 3,
     pick_warning_lead_days: 1,
     history_retention_years: 3,
+    max_coordinator_households: 3,
+    draft_start_lead_days: 0,
   });
+  const [noteCategories, setNoteCategories] = useState<NoteCategory[]>([]);
+  const [newCategory, setNewCategory] = useState({ name: "", slug: "" });
   const [email, setEmail] = useState("");
   const [householdId, setHouseholdId] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -95,13 +100,14 @@ export function AdminPage() {
   const load = useCallback(async () => {
     setError(null);
     try {
-      const [hh, st, us, audit, emailRes, invitesRes] = await Promise.all([
+      const [hh, st, us, audit, emailRes, invitesRes, catsRes] = await Promise.all([
         api.adminHouseholds(),
         api.adminSettings(),
         api.adminUsers(),
         api.adminAudit({ limit: 30 }),
         api.adminEmailStatus(),
         api.adminInvites(),
+        api.adminNoteCategories(),
       ]);
       setHouseholds(hh.households);
       setSettings(st.settings);
@@ -110,7 +116,10 @@ export function AdminPage() {
         pick_window_days: st.settings.pick_window_days,
         pick_warning_lead_days: st.settings.pick_warning_lead_days,
         history_retention_years: st.settings.history_retention_years,
+        max_coordinator_households: st.settings.max_coordinator_households,
+        draft_start_lead_days: st.settings.draft_start_lead_days,
       });
+      setNoteCategories(catsRes.categories);
       setUsers(us.users);
       setPendingInvites(invitesRes.invites);
       setAuditEvents(audit.events);
@@ -245,6 +254,7 @@ export function AdminPage() {
         color: data.color,
         active: data.active,
         is_worker_bee: data.is_worker_bee,
+        authority: data.authority,
         is_coordinator: data.is_coordinator,
       });
       await load();
@@ -315,9 +325,9 @@ export function AdminPage() {
         <h2 className="font-medium text-slate-800 mb-1">People</h2>
         <p className="text-xs text-slate-500 mb-4">
           Member households use the calendar and pick on their turn. Coordinator households can run
-          periods and drafts — any active member inherits that access. Admin accounts manage cabin
-          setup (login-specific). Mark up to three owning households as coordinator in Households
-          below. New users join via an invite link — there is no open signup page.
+          periods and drafts when members enable scheduling tools in Settings. Admin accounts manage
+          cabin setup. Mark coordinator households below (cap in System settings). New users join
+          via an invite link — there is no open signup page.
         </p>
 
         {emailStatus && !emailStatus.configured && (
@@ -556,20 +566,120 @@ export function AdminPage() {
                 Active
               </label>
               {!h.is_worker_bee && (
-                <label className="flex items-center gap-1 text-xs text-slate-600">
-                  <input
-                    type="checkbox"
-                    checked={h.is_coordinator}
+                <label className="flex flex-col gap-0.5 text-xs text-slate-600">
+                  Authority
+                  <select
+                    value={h.authority ?? (h.is_coordinator ? "coordinator" : "active")}
                     onChange={(e) =>
-                      void patchHousehold(h.id, { is_coordinator: e.target.checked })
+                      void patchHousehold(h.id, {
+                        authority: e.target.value as HouseholdAuthority,
+                      })
                     }
-                  />
-                  Coordinator
+                    className="rounded border border-slate-300 px-2 py-1 bg-white text-xs"
+                  >
+                    <option value="active">Active</option>
+                    <option value="coordinator">Coordinator</option>
+                    <option value="admin">Admin</option>
+                  </select>
                 </label>
               )}
             </li>
           ))}
         </ul>
+      </section>
+
+      <section id="notes" className="mb-10 scroll-mt-16">
+        <h2 className="font-medium text-slate-800 mb-1">Note categories</h2>
+        <p className="text-xs text-slate-500 mb-4">
+          Categories label calendar notes. General is the default when none is set. Away is seeded for
+          travel/absence hints during draft picks.
+        </p>
+        <ul className="space-y-2 mb-4">
+          {noteCategories.map((c) => (
+            <li
+              key={c.id}
+              className="rounded-lg border border-slate-200 bg-white p-3 text-sm flex flex-wrap items-center gap-3"
+            >
+              <input
+                type="text"
+                defaultValue={c.name}
+                onBlur={(e) => {
+                  if (e.target.value.trim() && e.target.value !== c.name) {
+                    void api
+                      .updateNoteCategory(c.id, { name: e.target.value.trim() })
+                      .then(() => load())
+                      .catch((err) =>
+                        setError(err instanceof Error ? err.message : "Update failed"),
+                      );
+                  }
+                }}
+                className="rounded border border-slate-300 px-2 py-1"
+              />
+              <code className="text-xs text-slate-500">{c.slug}</code>
+              <label className="flex items-center gap-1 text-xs">
+                <input
+                  type="checkbox"
+                  checked={c.active}
+                  onChange={(e) =>
+                    void api
+                      .updateNoteCategory(c.id, { active: e.target.checked })
+                      .then(() => load())
+                      .catch((err) =>
+                        setError(err instanceof Error ? err.message : "Update failed"),
+                      )
+                  }
+                />
+                Active
+              </label>
+            </li>
+          ))}
+        </ul>
+        <form
+          onSubmit={(e) => {
+            e.preventDefault();
+            if (!newCategory.name.trim() || !newCategory.slug.trim()) return;
+            setBusy(true);
+            void api
+              .createNoteCategory({
+                name: newCategory.name.trim(),
+                slug: newCategory.slug.trim().toLowerCase().replace(/\s+/g, "-"),
+              })
+              .then(() => {
+                setNewCategory({ name: "", slug: "" });
+                return load();
+              })
+              .catch((err) => setError(err instanceof Error ? err.message : "Create failed"))
+              .finally(() => setBusy(false));
+          }}
+          className="rounded-lg border border-slate-200 bg-white p-4 flex flex-wrap items-end gap-3"
+        >
+          <label className="text-sm">
+            Name
+            <input
+              type="text"
+              value={newCategory.name}
+              onChange={(e) => setNewCategory((f) => ({ ...f, name: e.target.value }))}
+              className="mt-1 block rounded border border-slate-300 px-2 py-1.5"
+            />
+          </label>
+          <label className="text-sm">
+            Slug
+            <input
+              type="text"
+              value={newCategory.slug}
+              onChange={(e) => setNewCategory((f) => ({ ...f, slug: e.target.value }))}
+              className="mt-1 block rounded border border-slate-300 px-2 py-1.5"
+              placeholder="away"
+            />
+          </label>
+          <button
+            type="submit"
+            disabled={busy}
+            className="rounded bg-slate-800 text-white px-4 py-2 text-sm disabled:opacity-50"
+          >
+            Add category
+          </button>
+        </form>
       </section>
 
       <section id="system" className="mb-10 scroll-mt-16">
@@ -617,6 +727,43 @@ export function AdminPage() {
                 setSystemForm((f) => ({
                   ...f,
                   pick_warning_lead_days: parseInt(e.target.value, 10) || 0,
+                }))
+              }
+              className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 bg-white"
+            />
+          </label>
+          <label className="block text-sm">
+            Max coordinator households
+            <input
+              type="number"
+              min={1}
+              max={20}
+              disabled={busy}
+              value={systemForm.max_coordinator_households}
+              onChange={(e) =>
+                setSystemForm((f) => ({
+                  ...f,
+                  max_coordinator_households: parseInt(e.target.value, 10) || 1,
+                }))
+              }
+              className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 bg-white"
+            />
+          </label>
+          <label className="block text-sm">
+            Default draft auto-start lead (days)
+            <span className="block text-xs font-normal text-slate-500 mt-0.5 mb-1">
+              Default for new period plans. Period plan can override per cabin schedule.
+            </span>
+            <input
+              type="number"
+              min={0}
+              max={365}
+              disabled={busy}
+              value={systemForm.draft_start_lead_days}
+              onChange={(e) =>
+                setSystemForm((f) => ({
+                  ...f,
+                  draft_start_lead_days: parseInt(e.target.value, 10) || 0,
                 }))
               }
               className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 bg-white"

@@ -106,8 +106,12 @@ export function householdInitial(name: string): string {
   return trimmed.charAt(0).toUpperCase();
 }
 
+export function coveringWeeksForDay(date: Date, weeks: CalendarWeek[]): CalendarWeek[] {
+  return prioritizeWeeksForDay(date, weeksCoveringDay(date, weeks));
+}
+
 export function weekForDay(date: Date, weeks: CalendarWeek[]): CalendarWeek | null {
-  const covering = prioritizeWeeksForDay(date, weeksCoveringDay(date, weeks));
+  const covering = coveringWeeksForDay(date, weeks);
   return covering[0] ?? null;
 }
 

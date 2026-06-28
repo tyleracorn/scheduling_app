@@ -1,4 +1,4 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useState, type FormEvent } from "react";
 import { api } from "../lib/api";
 import type { AuthUser } from "../lib/api";
 import type { CalendarNote, CalendarWeek, OccupancyIndicator } from "../lib/calendar-types";
@@ -17,6 +17,7 @@ type Props = {
   date: string;
   dateLabel: string;
   week: CalendarWeek | null;
+  coveringWeeks: CalendarWeek[];
   notes: CalendarNote[];
   occupancy: OccupancyIndicator[];
   user: AuthUser;
@@ -40,6 +41,7 @@ export function DayDetailDrawer({
   date,
   dateLabel,
   week,
+  coveringWeeks,
   notes,
   occupancy,
   user,
@@ -53,6 +55,7 @@ export function DayDetailDrawer({
   const [busy, setBusy] = useState(false);
   const [households, setHouseholds] = useState<Household[]>([]);
   const [selectedHousehold, setSelectedHousehold] = useState("");
+  const [assignWeekId, setAssignWeekId] = useState("");
   const [reassignReason, setReassignReason] = useState("");
   const [noteBody, setNoteBody] = useState("");
   const [draft, setDraft] = useState<DraftState | null>(null);
@@ -62,15 +65,39 @@ export function DayDetailDrawer({
   const [reviseOccupancy, setReviseOccupancy] = useState<OccupancyPick>(() => defaultOccupancyPick());
   const householdId = user.householdId;
 
+  const assignableWeeks = useMemo(
+    () =>
+      coveringWeeks.filter(
+        (w) => w.period_status === "assignment" || w.period_status === "published",
+      ),
+    [coveringWeeks],
+  );
+
+  const assignWeek = useMemo(() => {
+    if (assignWeekId) {
+      return assignableWeeks.find((w) => w.period_week_id === assignWeekId) ?? week;
+    }
+    return assignableWeeks[0] ?? week;
+  }, [assignWeekId, assignableWeeks, week]);
+
+  useEffect(() => {
+    const preferred =
+      week &&
+      assignableWeeks.some((w) => w.period_week_id === week.period_week_id)
+        ? week.period_week_id
+        : (assignableWeeks[0]?.period_week_id ?? week?.period_week_id ?? "");
+    setAssignWeekId(preferred);
+  }, [date, week, assignableWeeks]);
+
   const ownsWeek = !!(week?.assignment && householdId === week.assignment.household_id);
   const myDayOccupancy = occupancy.filter((o) => o.household_id === householdId);
 
   const canAssign =
     isCoordinator &&
-    week &&
-    (week.period_status === "assignment" || week.period_status === "published");
-  const isPublished = week?.period_status === "published";
-  const isUnassigned = week && !week.assignment;
+    assignWeek &&
+    (assignWeek.period_status === "assignment" || assignWeek.period_status === "published");
+  const isPublished = assignWeek?.period_status === "published";
+  const isUnassigned = assignWeek && !assignWeek.assignment;
   const isDraftWeek = week?.period_status === "draft";
 
   const activeTurn = draft?.active_turn ?? null;
@@ -154,7 +181,7 @@ export function DayDetailDrawer({
   }
 
   async function assignOrReassign() {
-    if (!week || !selectedHousehold) return;
+    if (!assignWeek || !selectedHousehold) return;
     if (isPublished && !reassignReason.trim()) {
       setError("Reason is required when changing a published assignment.");
       return;
@@ -163,8 +190,8 @@ export function DayDetailDrawer({
     setError(null);
     try {
       await api.assignWeek(
-        week.period_id,
-        week.period_week_id,
+        assignWeek.period_id,
+        assignWeek.period_week_id,
         selectedHousehold,
         isPublished ? reassignReason.trim() : undefined,
         occupancyForAssign(assignOccupancy),
@@ -431,11 +458,30 @@ export function DayDetailDrawer({
           </section>
         )}
 
-        {canAssign && week && (
+        {canAssign && assignWeek && (
           <section className="mb-4 pb-4 border-b border-slate-200">
             <h3 className="text-sm font-medium text-slate-800 mb-2">
               {isUnassigned ? "Assign week" : "Reassign week"}
             </h3>
+            {assignableWeeks.length > 1 && (
+              <label className="block text-sm mb-2">
+                Which scheduling week?
+                <span className="block text-xs font-normal text-slate-500 mt-0.5 mb-1">
+                  This day is a handoff between two weeks — choose which week to assign.
+                </span>
+                <select
+                  value={assignWeekId}
+                  onChange={(e) => setAssignWeekId(e.target.value)}
+                  className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 bg-white"
+                >
+                  {assignableWeeks.map((w) => (
+                    <option key={w.period_week_id} value={w.period_week_id}>
+                      {w.week_start_date} – {w.week_end_date} ({w.period_name})
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <label className="block text-sm mb-2">
               Household
               <select
@@ -556,7 +602,14 @@ export function DayDetailDrawer({
           <ul className="space-y-2 mt-2">
             {notes.map((n) => (
               <li key={n.id} className="text-sm rounded border border-slate-200 p-2 bg-slate-50">
-                <p className="font-medium text-slate-700">{n.household_name}</p>
+                <p className="font-medium text-slate-700">
+                  {n.household_name}
+                  {n.category_slug !== "general" && (
+                    <span className="ml-2 text-xs font-normal text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">
+                      {n.category_name}
+                    </span>
+                  )}
+                </p>
                 <p className="text-slate-600 mt-1 whitespace-pre-wrap">{n.body}</p>
                 {n.start_date !== n.end_date && (
                   <p className="text-xs text-slate-400 mt-1">

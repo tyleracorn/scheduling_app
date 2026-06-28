@@ -11,11 +11,19 @@ import {
   type OccupancyDisplayStrength,
 } from "../lib/preferences";
 
-function roleBadges(user: { isAdmin: boolean; isCoordinator: boolean }) {
+function roleBadges(user: {
+  isAdmin: boolean;
+  isCoordinator: boolean;
+  householdAuthority: "active" | "coordinator" | "admin" | null;
+}) {
   const badges: string[] = [];
   if (user.isAdmin) badges.push("Admin");
-  if (user.isCoordinator || user.isAdmin) badges.push("Coordinator");
-  if (!user.isAdmin && !user.isCoordinator) badges.push("Member");
+  else if (user.householdAuthority === "admin") badges.push("Household admin");
+  if (user.isCoordinator && !user.isAdmin) badges.push("Scheduling tools");
+  if (user.householdAuthority === "coordinator" && !user.isCoordinator) {
+    badges.push("Coordinator household (tools off)");
+  }
+  if (badges.length === 0) badges.push("Member");
   return badges;
 }
 
@@ -65,6 +73,21 @@ export function SettingsPage() {
       setMessage("Profile updated.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function toggleSchedulingTools(enabled: boolean) {
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await api.updateSchedulingTools(enabled);
+      await refresh();
+      setMessage(enabled ? "Scheduling tools enabled." : "Scheduling tools disabled.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Update failed");
     } finally {
       setBusy(false);
     }
@@ -160,7 +183,25 @@ export function SettingsPage() {
               Save name
             </button>
           </form>
-          <form onSubmit={(e) => void changePassword(e)} className="space-y-3 border-t border-slate-100 pt-4">
+          {user.canToggleSchedulingTools && (
+            <div className="border-t border-slate-100 pt-4 mt-4">
+              <h3 className="text-sm font-medium text-slate-800 mb-1">Scheduling tools</h3>
+              <p className="text-xs text-slate-500 mb-3">
+                Your household is marked as coordinator. Toggle period and draft tools for your
+                account without affecting other members of the household.
+              </p>
+              <label className="flex items-center gap-2 text-sm">
+                <input
+                  type="checkbox"
+                  checked={user.schedulingToolsEnabled}
+                  disabled={busy}
+                  onChange={(e) => void toggleSchedulingTools(e.target.checked)}
+                />
+                Enable scheduling tools for me
+              </label>
+            </div>
+          )}
+          <form onSubmit={(e) => void changePassword(e)} className="space-y-3 border-t border-slate-100 pt-4 mt-4">
             <h3 className="text-sm font-medium text-slate-800">Change password</h3>
             <label className="block text-sm">
               Current password

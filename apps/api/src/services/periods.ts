@@ -1,6 +1,7 @@
 import type { PeriodStatus, Prisma } from "@prisma/client";
 import { AppError } from "../lib/errors.js";
 import { parseDateString, toDateString } from "../lib/dates.js";
+import { computeDraftStartAtFromString } from "../lib/period-schedule.js";
 import { computePeriodWeeks } from "../lib/period-weeks.js";
 import { prisma } from "../lib/prisma.js";
 
@@ -55,6 +56,8 @@ export function formatPeriod(period: PeriodRow) {
     start_date: toDateString(period.startDate),
     end_date: toDateString(period.endDate),
     opening_at: period.openingAt.toISOString(),
+    draft_start_at: period.draftStartAt?.toISOString() ?? null,
+    auto_draft_paused: period.autoDraftPaused,
     status: period.status,
     draft_started_at: period.draftStartedAt?.toISOString() ?? null,
     published_at: period.publishedAt?.toISOString() ?? null,
@@ -97,7 +100,8 @@ export async function createPeriod(input: {
   name: string;
   start_date: string;
   end_date: string;
-  opening_at: string;
+  opening_at?: string;
+  draft_start_at?: string;
   created_by_user_id: string;
 }) {
   if (input.start_date > input.end_date) {
@@ -106,9 +110,12 @@ export async function createPeriod(input: {
   const settings = await getSystemSettings();
   const startDate = parseDateString(input.start_date);
   const endDate = parseDateString(input.end_date);
-  const openingAt = new Date(input.opening_at);
   const now = new Date();
-  const status: PeriodStatus = openingAt <= now ? "open" : "scheduled";
+  const openingAt = input.opening_at ? new Date(input.opening_at) : now;
+  const draftStartAt =
+    input.draft_start_at != null
+      ? new Date(input.draft_start_at)
+      : computeDraftStartAtFromString(input.start_date, settings.draftStartLeadDays);
 
   const period = await prisma.schedulingPeriod.create({
     data: {
@@ -116,7 +123,8 @@ export async function createPeriod(input: {
       startDate,
       endDate,
       openingAt,
-      status,
+      draftStartAt,
+      status: "open",
       createdByUserId: input.created_by_user_id,
     },
   });

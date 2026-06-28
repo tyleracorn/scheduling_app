@@ -364,6 +364,11 @@ export async function publishPeriod(periodId: string, actorUserId: string) {
     { period_id: periodId },
   );
 
+  const { writePeriodExportToPath } = await import("./export.js");
+  await writePeriodExportToPath(periodId, "published").catch((err) => {
+    console.error("[export] publish export failed:", err);
+  });
+
   return {
     period: {
       id: period.id,

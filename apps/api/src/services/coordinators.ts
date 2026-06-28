@@ -1,28 +1,36 @@
 import { AppError } from "../lib/errors.js";
 import { prisma } from "../lib/prisma.js";
 
-const MAX_COORDINATOR_HOUSEHOLDS = 3;
+export async function getMaxCoordinatorHouseholds(): Promise<number> {
+  const settings = await prisma.systemSettings.findUniqueOrThrow({ where: { id: 1 } });
+  return settings.maxCoordinatorHouseholds;
+}
 
 export async function assertCoordinatorHouseholdLimit(
   householdId: string,
-  enabling: boolean,
+  authority: "active" | "coordinator" | "admin",
 ): Promise<void> {
-  if (!enabling) return;
+  if (authority !== "coordinator") return;
 
   const household = await prisma.household.findUnique({ where: { id: householdId } });
   if (!household || household.isWorkerBee) {
     throw new AppError(422, "invalid_household", "Worker Bee cannot be a coordinator household");
   }
-  if (household.isCoordinator) return;
+  if (household.authority === "coordinator") return;
 
+  const max = await getMaxCoordinatorHouseholds();
   const count = await prisma.household.count({
-    where: { isCoordinator: true, isWorkerBee: false, NOT: { id: householdId } },
+    where: {
+      authority: "coordinator",
+      isWorkerBee: false,
+      NOT: { id: householdId },
+    },
   });
-  if (count >= MAX_COORDINATOR_HOUSEHOLDS) {
+  if (count >= max) {
     throw new AppError(
       422,
       "coordinator_limit",
-      `At most ${MAX_COORDINATOR_HOUSEHOLDS} coordinator households allowed`,
+      `At most ${max} coordinator households allowed`,
     );
   }
 }

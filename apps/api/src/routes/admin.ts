@@ -22,6 +22,7 @@ const householdSchema = z.object({
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
   active: z.boolean().optional(),
   is_worker_bee: z.boolean().optional(),
+  authority: z.enum(["active", "coordinator", "admin"]).optional(),
   is_coordinator: z.boolean().optional(),
 });
 
@@ -42,6 +43,8 @@ const settingsSchema = z.object({
   pick_warning_lead_days: z.number().int().min(0).max(7).optional(),
   history_retention_years: z.number().int().min(1).max(20).optional(),
   household_slot_count: z.number().int().min(1).max(20).optional(),
+  max_coordinator_households: z.number().int().min(1).max(20).optional(),
+  draft_start_lead_days: z.number().int().min(0).max(365).optional(),
 });
 
 export async function adminRoutes(app: FastifyInstance) {
@@ -105,13 +108,21 @@ export async function adminRoutes(app: FastifyInstance) {
     }
 
     const willBeWorkerBee = data.is_worker_bee ?? existing.isWorkerBee;
-    if (data.is_coordinator === true || (data.is_coordinator !== false && existing.isCoordinator)) {
+    let authority = data.authority;
+    if (authority === undefined && data.is_coordinator !== undefined) {
+      authority = data.is_coordinator ? "coordinator" : "active";
+    }
+    const nextAuthority = willBeWorkerBee
+      ? "active"
+      : (authority ?? existing.authority);
+
+    if (nextAuthority === "coordinator" || nextAuthority === "admin") {
       if (willBeWorkerBee) {
-        throw new AppError(422, "invalid_household", "Worker Bee cannot be a coordinator household");
+        throw new AppError(422, "invalid_household", "Worker Bee cannot have elevated authority");
       }
     }
-    if (data.is_coordinator === true) {
-      await assertCoordinatorHouseholdLimit(id, true);
+    if (nextAuthority === "coordinator") {
+      await assertCoordinatorHouseholdLimit(id, "coordinator");
     }
 
     const household = await prisma.household.update({
@@ -121,7 +132,7 @@ export async function adminRoutes(app: FastifyInstance) {
         color: data.color,
         active: data.active,
         isWorkerBee: data.is_worker_bee,
-        isCoordinator: willBeWorkerBee ? false : data.is_coordinator,
+        authority: nextAuthority,
       },
     });
     return { household: formatHousehold(household) };
@@ -141,8 +152,12 @@ export async function adminRoutes(app: FastifyInstance) {
         active: u.active,
         household_id: u.membership?.householdId ?? null,
         household_name: u.membership?.household.name ?? null,
+        household_authority: u.membership?.household.isWorkerBee
+          ? "active"
+          : (u.membership?.household.authority ?? null),
         household_is_coordinator: Boolean(
-          u.membership?.household.isCoordinator && !u.membership?.household.isWorkerBee,
+          u.membership?.household.authority === "coordinator" &&
+            !u.membership?.household.isWorkerBee,
         ),
       })),
     };
@@ -291,6 +306,8 @@ export async function adminRoutes(app: FastifyInstance) {
       settings: {
         ...formatSystemSettingsForApi(settings),
         household_slot_count: settings.householdSlotCount,
+        max_coordinator_households: settings.maxCoordinatorHouseholds,
+        draft_start_lead_days: settings.draftStartLeadDays,
       },
     };
   });
@@ -317,6 +334,8 @@ export async function adminRoutes(app: FastifyInstance) {
             : undefined,
         historyRetentionYears: d.history_retention_years,
         householdSlotCount: d.household_slot_count,
+        maxCoordinatorHouseholds: d.max_coordinator_households,
+        draftStartLeadDays: d.draft_start_lead_days,
         updatedByUserId: admin.id,
       },
     });
@@ -327,6 +346,78 @@ export async function adminRoutes(app: FastifyInstance) {
       settings: {
         ...formatSystemSettingsForApi(settings),
         household_slot_count: settings.householdSlotCount,
+        max_coordinator_households: settings.maxCoordinatorHouseholds,
+        draft_start_lead_days: settings.draftStartLeadDays,
+      },
+    };
+  });
+
+  const noteCategorySchema = z.object({
+    name: z.string().min(1).max(80),
+    slug: z.string().min(1).max(80).regex(/^[a-z0-9_-]+$/),
+    active: z.boolean().optional(),
+    sort_order: z.number().int().min(0).optional(),
+  });
+
+  app.get("/api/v1/admin/note-categories", async () => {
+    const categories = await prisma.noteCategory.findMany({ orderBy: { sortOrder: "asc" } });
+    return {
+      categories: categories.map((c) => ({
+        id: c.id,
+        name: c.name,
+        slug: c.slug,
+        active: c.active,
+        sort_order: c.sortOrder,
+      })),
+    };
+  });
+
+  app.post("/api/v1/admin/note-categories", async (request) => {
+    const parsed = noteCategorySchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new AppError(400, "validation_error", "Invalid category", parsed.error.flatten());
+    }
+    const cat = await prisma.noteCategory.create({
+      data: {
+        name: parsed.data.name,
+        slug: parsed.data.slug,
+        active: parsed.data.active ?? true,
+        sortOrder: parsed.data.sort_order ?? 0,
+      },
+    });
+    return {
+      category: {
+        id: cat.id,
+        name: cat.name,
+        slug: cat.slug,
+        active: cat.active,
+        sort_order: cat.sortOrder,
+      },
+    };
+  });
+
+  app.patch("/api/v1/admin/note-categories/:id", async (request) => {
+    const { id } = request.params as { id: string };
+    const parsed = noteCategorySchema.partial().safeParse(request.body);
+    if (!parsed.success) {
+      throw new AppError(400, "validation_error", "Invalid category", parsed.error.flatten());
+    }
+    const cat = await prisma.noteCategory.update({
+      where: { id },
+      data: {
+        name: parsed.data.name,
+        slug: parsed.data.slug,
+        active: parsed.data.active,
+        sortOrder: parsed.data.sort_order,
+      },
+    });
+    return {
+      category: {
+        id: cat.id,
+        name: cat.name,
+        slug: cat.slug,
+        active: cat.active,
+        sort_order: cat.sortOrder,
       },
     };
   });

@@ -59,7 +59,11 @@ export async function notifyCoordinators(
   options: { email?: boolean } = { email: true },
 ) {
   const coordinatorHouseholds = await prisma.household.findMany({
-    where: { isCoordinator: true, isWorkerBee: false, active: true },
+    where: {
+      OR: [{ authority: "coordinator" }, { authority: "admin" }],
+      isWorkerBee: false,
+      active: true,
+    },
     select: { id: true },
   });
   const householdIds = coordinatorHouseholds.map((h) => h.id);

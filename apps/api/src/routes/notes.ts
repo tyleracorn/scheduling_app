@@ -16,6 +16,7 @@ const noteBodySchema = z.object({
   start_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   end_date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
   body: z.string().min(1).max(2000),
+  category_id: z.string().uuid().optional().nullable(),
 });
 
 function requireHouseholdId(user: { householdId: string | null }): string {
@@ -25,16 +26,16 @@ function requireHouseholdId(user: { householdId: string | null }): string {
   return user.householdId;
 }
 
-function formatNote(
-  note: {
-    id: string;
-    householdId: string;
-    startDate: Date;
-    endDate: Date;
-    body: string;
-    household: { name: string };
-  },
-) {
+function formatNote(note: {
+  id: string;
+  householdId: string;
+  startDate: Date;
+  endDate: Date;
+  body: string;
+  categoryId: string | null;
+  household: { name: string };
+  category: { id: string; name: string; slug: string } | null;
+}) {
   return {
     id: note.id,
     household_id: note.householdId,
@@ -42,10 +43,29 @@ function formatNote(
     start_date: toDateString(note.startDate),
     end_date: toDateString(note.endDate),
     body: note.body,
+    category_id: note.categoryId,
+    category_name: note.category?.name ?? "General",
+    category_slug: note.category?.slug ?? "general",
   };
 }
 
 async function notesRoutes(app: FastifyInstance) {
+  app.get("/api/v1/note-categories", async (request) => {
+    requireAuth(request);
+    const categories = await prisma.noteCategory.findMany({
+      where: { active: true },
+      orderBy: { sortOrder: "asc" },
+    });
+    return {
+      categories: categories.map((c) => ({
+        id: c.id,
+        name: c.name,
+        slug: c.slug,
+        sort_order: c.sortOrder,
+      })),
+    };
+  });
+
   app.get("/api/v1/notes", async (request) => {
     requireAuth(request);
     const parsed = dateRangeSchema.safeParse(request.query);
@@ -63,7 +83,7 @@ async function notesRoutes(app: FastifyInstance) {
         startDate: { lte: rangeEnd },
         endDate: { gte: minEnd },
       },
-      include: { household: true },
+      include: { household: true, category: true },
       orderBy: { startDate: "asc" },
     });
     return { notes: notes.map(formatNote) };
@@ -89,15 +109,22 @@ async function notesRoutes(app: FastifyInstance) {
         `Notes cannot start before ${cutoffStr} (history retention).`,
       );
     }
+    if (parsed.data.category_id) {
+      const cat = await prisma.noteCategory.findFirst({
+        where: { id: parsed.data.category_id, active: true },
+      });
+      if (!cat) throw new AppError(400, "validation_error", "Invalid category");
+    }
     const note = await prisma.calendarNote.create({
       data: {
         householdId,
+        categoryId: parsed.data.category_id ?? null,
         startDate: parseDateString(parsed.data.start_date),
         endDate: parseDateString(parsed.data.end_date),
         body: parsed.data.body,
         createdByUserId: user.id,
       },
-      include: { household: true },
+      include: { household: true, category: true },
     });
     return { note: formatNote(note) };
   });
@@ -114,14 +141,21 @@ async function notesRoutes(app: FastifyInstance) {
     if (!existing || existing.householdId !== householdId) {
       throw new AppError(404, "not_found", "Note not found");
     }
+    if (parsed.data.category_id) {
+      const cat = await prisma.noteCategory.findFirst({
+        where: { id: parsed.data.category_id, active: true },
+      });
+      if (!cat) throw new AppError(400, "validation_error", "Invalid category");
+    }
     const note = await prisma.calendarNote.update({
       where: { id },
       data: {
         startDate: parseDateString(parsed.data.start_date),
         endDate: parseDateString(parsed.data.end_date),
         body: parsed.data.body,
+        categoryId: parsed.data.category_id ?? null,
       },
-      include: { household: true },
+      include: { household: true, category: true },
     });
     return { note: formatNote(note) };
   });

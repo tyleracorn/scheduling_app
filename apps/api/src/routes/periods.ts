@@ -3,6 +3,7 @@ import fp from "fastify-plugin";
 import { z } from "zod";
 import type { PeriodStatus } from "@prisma/client";
 import { AppError } from "../lib/errors.js";
+import { prisma } from "../lib/prisma.js";
 import { requireAuth, requireCoordinator } from "../plugins/auth.js";
 import {
   createPeriod,
@@ -83,6 +84,7 @@ const planSchema = z.object({
   rounds_per_household: z.number().int().min(1).max(10),
   periods_to_schedule: z.number().int().min(1).max(12),
   week_start_day: z.number().int().min(0).max(6),
+  draft_start_lead_days: z.number().int().min(0).max(365),
 });
 
 const generateSchema = z.object({
@@ -361,6 +363,21 @@ async function periodsRoutes(app: FastifyInstance) {
     const user = requireCoordinator(request);
     const { id } = request.params as { id: string };
     return await publishPeriod(id, user.id);
+  });
+
+  app.get("/api/v1/periods/:id/export", async (request, reply) => {
+    requireAuth(request);
+    const { id } = request.params as { id: string };
+    const { buildPeriodExportCsv } = await import("../services/export.js");
+    const csv = await buildPeriodExportCsv(id);
+    if (!csv) {
+      throw new AppError(404, "not_found", "Period not found");
+    }
+    const period = await prisma.schedulingPeriod.findUnique({ where: { id } });
+    const safeName = (period?.name ?? "period").replace(/[^\w.-]+/g, "_");
+    reply.header("Content-Type", "text/csv; charset=utf-8");
+    reply.header("Content-Disposition", `attachment; filename="${safeName}.csv"`);
+    return reply.send(csv);
   });
 
   app.post("/api/v1/periods/:periodId/turns/:turnId/force-skip", async (request) => {

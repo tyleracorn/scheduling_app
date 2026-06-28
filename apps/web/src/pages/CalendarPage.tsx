@@ -3,7 +3,7 @@ import { Link, useSearchParams } from "react-router-dom";
 import { api } from "../lib/api";
 import { calendarPathForPeriod } from "../lib/period-navigation";
 import type { CalendarResponse, CalendarWeek } from "../lib/calendar-types";
-import { formatPeriodStatus, monthRange, notesForDay, occupancyForDay } from "../lib/calendar-utils";
+import { formatPeriodStatus, coveringWeeksForDay, monthRange, notesForDay, occupancyForDay } from "../lib/calendar-utils";
 import { getPeriodAttentionMessage, sidebarPeriods } from "../lib/period-attention";
 import { useAuth } from "../context/AuthContext";
 import { CalendarLegend } from "../components/CalendarLegend";
@@ -29,6 +29,7 @@ export function CalendarPage() {
     date: string;
     dateLabel: string;
     week: CalendarWeek | null;
+    coveringWeeks: CalendarWeek[];
   } | null>(null);
   const [draftRefresh, setDraftRefresh] = useState(0);
   const [expandPeriodId, setExpandPeriodId] = useState<string | null>(null);
@@ -246,6 +247,7 @@ export function CalendarPage() {
                     timeZone: "UTC",
                   }),
                   week,
+                  coveringWeeks: coveringWeeksForDay(date, weeks),
                 })
               }
             />
@@ -287,6 +289,7 @@ export function CalendarPage() {
           date={selected.date}
           dateLabel={selected.dateLabel}
           week={selected.week}
+          coveringWeeks={selected.coveringWeeks}
           notes={drawerNotes}
           occupancy={drawerOccupancy}
           user={user}

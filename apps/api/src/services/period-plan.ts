@@ -46,6 +46,7 @@ export function formatPeriodPlan(settings: Awaited<ReturnType<typeof getSystemSe
     rounds_per_household: settings.weekSelectionsPerHousehold,
     periods_to_schedule: settings.periodsToSchedule,
     week_start_day: settings.weekStartDay,
+    draft_start_lead_days: settings.draftStartLeadDays,
   };
 }
 
@@ -60,6 +61,7 @@ export async function savePeriodPlan(input: {
   rounds_per_household: number;
   periods_to_schedule: number;
   week_start_day: number;
+  draft_start_lead_days: number;
   updated_by_user_id: string;
 }) {
   if (input.weeks_per_period < 1 || input.weeks_per_period > 52) {
@@ -74,6 +76,9 @@ export async function savePeriodPlan(input: {
   if (input.week_start_day < 0 || input.week_start_day > 6) {
     throw new AppError(400, "validation_error", "week_start_day must be 0–6");
   }
+  if (input.draft_start_lead_days < 0 || input.draft_start_lead_days > 365) {
+    throw new AppError(400, "validation_error", "draft_start_lead_days must be 0–365");
+  }
 
   await prisma.systemSettings.update({
     where: { id: 1 },
@@ -83,6 +88,7 @@ export async function savePeriodPlan(input: {
       weekSelectionsPerHousehold: input.rounds_per_household,
       periodsToSchedule: input.periods_to_schedule,
       weekStartDay: input.week_start_day,
+      draftStartLeadDays: input.draft_start_lead_days,
       updatedByUserId: input.updated_by_user_id,
     },
   });
@@ -140,7 +146,6 @@ export async function generatePeriodsFromPlan(
       name: `Period ${periodNumber} (${startStr})`,
       start_date: startStr,
       end_date: endStr,
-      opening_at: new Date().toISOString(),
       created_by_user_id: createdByUserId,
     });
     created.push({
@@ -271,6 +276,7 @@ export async function resetPeriod(periodId: string) {
         consecutiveAutoSkips: 0,
         draftOnHold: false,
         currentRound: 1,
+        autoDraftPaused: false,
       },
     }),
   ]);

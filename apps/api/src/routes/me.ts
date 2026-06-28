@@ -3,7 +3,12 @@ import { z } from "zod";
 import { AppError } from "../lib/errors.js";
 import { prisma } from "../lib/prisma.js";
 import { hashPassword, verifyPassword } from "../lib/password.js";
-import { requireAuth } from "../plugins/auth.js";
+import {
+  canUseSchedulingTools,
+  hasCoordinatorHouseholdTier,
+  isSystemAdmin,
+} from "../lib/authority.js";
+import { requireAuth, requireCoordinatorHouseholdTier } from "../plugins/auth.js";
 
 const profileSchema = z.object({
   display_name: z.string().min(1).max(100),
@@ -14,23 +19,42 @@ const passwordSchema = z.object({
   new_password: z.string().min(8),
 });
 
+const schedulingToolsSchema = z.object({
+  enabled: z.boolean(),
+});
+
 function formatUser(user: {
   id: string;
   email: string;
   displayName: string;
   isAdmin: boolean;
+  schedulingToolsEnabled: boolean;
   membership: {
     householdId: string;
-    household: { name: string; isCoordinator: boolean; isWorkerBee: boolean };
+    household: {
+      name: string;
+      authority: "active" | "coordinator" | "admin";
+      isWorkerBee: boolean;
+    };
   } | null;
 }) {
   const household = user.membership?.household;
+  const ctx = {
+    isAdmin: user.isAdmin,
+    schedulingToolsEnabled: user.schedulingToolsEnabled,
+    household: household
+      ? { authority: household.authority, isWorkerBee: household.isWorkerBee }
+      : null,
+  };
   return {
     id: user.id,
     email: user.email,
     displayName: user.displayName,
-    isAdmin: user.isAdmin,
-    isCoordinator: Boolean(household?.isCoordinator && !household?.isWorkerBee),
+    isAdmin: isSystemAdmin(ctx),
+    isCoordinator: canUseSchedulingTools(ctx),
+    householdAuthority: household?.isWorkerBee ? null : (household?.authority ?? null),
+    schedulingToolsEnabled: user.schedulingToolsEnabled,
+    canToggleSchedulingTools: hasCoordinatorHouseholdTier(ctx),
     householdId: user.membership?.householdId ?? null,
     householdName: household?.name ?? null,
   };
@@ -46,6 +70,21 @@ export async function meRoutes(app: FastifyInstance) {
     const user = await prisma.user.update({
       where: { id: authUser.id },
       data: { displayName: parsed.data.display_name },
+      include: { membership: { include: { household: true } } },
+    });
+    return { user: formatUser(user) };
+  });
+
+  app.patch("/api/v1/me/scheduling-tools", async (request) => {
+    requireCoordinatorHouseholdTier(request);
+    const authUser = requireAuth(request);
+    const parsed = schedulingToolsSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new AppError(400, "validation_error", "Invalid payload", parsed.error.flatten());
+    }
+    const user = await prisma.user.update({
+      where: { id: authUser.id },
+      data: { schedulingToolsEnabled: parsed.data.enabled },
       include: { membership: { include: { household: true } } },
     });
     return { user: formatUser(user) };

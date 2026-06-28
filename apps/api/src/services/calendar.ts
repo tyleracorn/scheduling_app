@@ -73,7 +73,7 @@ export async function getCalendarAggregate(query: CalendarQuery) {
   const [notes, occupancy] = await Promise.all([
     prisma.calendarNote.findMany({
       where: { startDate: { lte: rangeEnd }, endDate: { gte: minEnd } },
-      include: { household: true },
+      include: { household: true, category: true },
       orderBy: { startDate: "asc" },
     }),
     prisma.occupancyIndicator.findMany({
@@ -99,6 +99,9 @@ export async function getCalendarAggregate(query: CalendarQuery) {
       start_date: toDateString(n.startDate),
       end_date: toDateString(n.endDate),
       body: n.body,
+      category_id: n.categoryId,
+      category_name: n.category?.name ?? "General",
+      category_slug: n.category?.slug ?? "general",
     })),
     occupancy: occupancy.map((o) => ({
       id: o.id,

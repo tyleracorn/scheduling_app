@@ -10,7 +10,19 @@ export type SystemSettings = {
 
 export type AdminSettings = SystemSettings & {
   household_slot_count: number;
+  max_coordinator_households: number;
+  draft_start_lead_days: number;
 };
+
+export type NoteCategory = {
+  id: string;
+  name: string;
+  slug: string;
+  active: boolean;
+  sort_order: number;
+};
+
+export type HouseholdAuthority = "active" | "coordinator" | "admin";
 
 export type PeriodAssignmentSummary = {
   period_id: string;
@@ -46,6 +58,9 @@ export type AuthUser = {
   displayName: string;
   isAdmin: boolean;
   isCoordinator: boolean;
+  householdAuthority: HouseholdAuthority | null;
+  schedulingToolsEnabled: boolean;
+  canToggleSchedulingTools: boolean;
   householdId: string | null;
   householdName: string | null;
 };
@@ -80,6 +95,11 @@ export const api = {
     request<{ user: AuthUser }>("/api/v1/me", {
       method: "PATCH",
       body: JSON.stringify({ display_name }),
+    }),
+  updateSchedulingTools: (enabled: boolean) =>
+    request<{ user: AuthUser }>("/api/v1/me/scheduling-tools", {
+      method: "PATCH",
+      body: JSON.stringify({ enabled }),
     }),
   changePassword: (current_password: string, new_password: string) =>
     request<{ ok: boolean }>("/api/v1/me/password", {
@@ -130,6 +150,7 @@ export const api = {
         active: boolean;
         is_worker_bee: boolean;
         is_coordinator: boolean;
+        authority: HouseholdAuthority;
       }[];
     }>("/api/v1/admin/households"),
   syncHouseholds: () =>
@@ -141,6 +162,7 @@ export const api = {
         active: boolean;
         is_worker_bee: boolean;
         is_coordinator: boolean;
+        authority: HouseholdAuthority;
       }[];
     }>(
       "/api/v1/admin/households/sync",
@@ -154,7 +176,14 @@ export const api = {
     }),
   updateAdminHousehold: (
     id: string,
-    data: Partial<{ name: string; color: string; active: boolean; is_worker_bee: boolean; is_coordinator: boolean }>,
+    data: Partial<{
+      name: string;
+      color: string;
+      active: boolean;
+      is_worker_bee: boolean;
+      is_coordinator: boolean;
+      authority: HouseholdAuthority;
+    }>,
   ) =>
     request<{
       household: {
@@ -164,6 +193,7 @@ export const api = {
         active: boolean;
         is_worker_bee: boolean;
         is_coordinator: boolean;
+        authority: HouseholdAuthority;
       };
     }>(
       `/api/v1/admin/households/${id}`,
@@ -298,6 +328,7 @@ export const api = {
     rounds_per_household: number;
     periods_to_schedule: number;
     week_start_day: number;
+    draft_start_lead_days: number;
   }) =>
     request<{ plan: PeriodPlan }>("/api/v1/periods/plan", {
       method: "PUT",
@@ -339,11 +370,40 @@ export const api = {
     return request<{ periods: Period[] }>(`/api/v1/periods${qs ? `?${qs}` : ""}`);
   },
   period: (id: string) => request<{ period: Period }>(`/api/v1/periods/${id}`),
+  exportPeriod: async (id: string, filename?: string) => {
+    const res = await fetch(`/api/v1/periods/${id}/export`, { credentials: "include" });
+    if (!res.ok) {
+      const body = (await res.json().catch(() => ({}))) as ApiError;
+      throw new Error(body.error?.message ?? body.message ?? "Export failed");
+    }
+    const blob = await res.blob();
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename ?? `period-${id}.csv`;
+    a.click();
+    URL.revokeObjectURL(url);
+  },
+  adminNoteCategories: () =>
+    request<{ categories: NoteCategory[] }>("/api/v1/admin/note-categories"),
+  createNoteCategory: (data: { name: string; slug: string; active?: boolean; sort_order?: number }) =>
+    request<{ category: NoteCategory }>("/api/v1/admin/note-categories", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+  updateNoteCategory: (
+    id: string,
+    data: Partial<{ name: string; slug: string; active: boolean; sort_order: number }>,
+  ) =>
+    request<{ category: NoteCategory }>(`/api/v1/admin/note-categories/${id}`, {
+      method: "PATCH",
+      body: JSON.stringify(data),
+    }),
   createPeriod: (data: {
     name: string;
     start_date: string;
     end_date: string;
-    opening_at: string;
+    opening_at?: string;
   }) =>
     request<{ period: Period }>("/api/v1/periods", {
       method: "POST",

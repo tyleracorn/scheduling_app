@@ -24,6 +24,7 @@ export function PeriodPlanForm({
     rounds_per_household: 1,
     periods_to_schedule: 4,
     week_start_day: 0,
+    draft_start_lead_days: 0,
   });
   const [replaceUnstarted, setReplaceUnstarted] = useState(false);
   const [planPreview, setPlanPreview] = useState<
@@ -40,6 +41,7 @@ export function PeriodPlanForm({
         rounds_per_household: plan.rounds_per_household,
         periods_to_schedule: plan.periods_to_schedule,
         week_start_day: plan.week_start_day,
+        draft_start_lead_days: plan.draft_start_lead_days,
       });
     } catch (e) {
       onError?.(e instanceof Error ? e.message : "Failed to load period plan");
@@ -190,6 +192,27 @@ export function PeriodPlanForm({
                   setPlanForm((f) => ({
                     ...f,
                     rounds_per_household: parseInt(e.target.value, 10) || 1,
+                  }))
+                }
+                className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 bg-white"
+              />
+            </label>
+            <label className="block text-sm">
+              Auto-start draft (days before period start)
+              <span className="block text-xs font-normal text-slate-500 mt-0.5 mb-1">
+                Draft begins this many days before the period start date. Use 0 to require manual
+                start.
+              </span>
+              <input
+                type="number"
+                min={0}
+                max={365}
+                required
+                value={planForm.draft_start_lead_days}
+                onChange={(e) =>
+                  setPlanForm((f) => ({
+                    ...f,
+                    draft_start_lead_days: parseInt(e.target.value, 10) || 0,
                   }))
                 }
                 className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 bg-white"

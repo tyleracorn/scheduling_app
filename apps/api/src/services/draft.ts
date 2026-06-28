@@ -605,6 +605,25 @@ export async function openDuePeriods() {
   }
 }
 
+export async function processAutoStartDrafts() {
+  const now = new Date();
+  const due = await prisma.schedulingPeriod.findMany({
+    where: {
+      status: "open",
+      autoDraftPaused: false,
+      draftStartAt: { lte: now },
+    },
+  });
+  for (const p of due) {
+    try {
+      await startDraft(p.id);
+    } catch (err) {
+      if (err instanceof AppError && err.code === "invalid_state") continue;
+      console.error(`[scheduler] auto-start draft failed for ${p.id}:`, err);
+    }
+  }
+}
+
 export async function processTurnWarnings() {
   const settings = await getSystemSettings();
   const leadMs = settings.pickWarningLeadHours * MS_PER_HOUR;

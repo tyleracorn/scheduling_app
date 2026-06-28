@@ -41,13 +41,19 @@ enum OccupancyStatus {
   red
 }
 
+enum HouseholdAuthority {
+  active
+  coordinator
+  admin
+}
+
 model Household {
-  id           String   @id @default(uuid()) @db.Uuid
-  name         String   @db.VarChar(100)
-  color        String   @db.Char(7)
-  active       Boolean  @default(true)
-  isWorkerBee  Boolean  @default(false) @map("is_worker_bee")
-  isCoordinator Boolean @default(false) @map("is_coordinator")
+  id           String             @id @default(uuid()) @db.Uuid
+  name         String             @db.VarChar(100)
+  color        String             @db.Char(7)
+  active       Boolean            @default(true)
+  isWorkerBee  Boolean            @default(false) @map("is_worker_bee")
+  authority    HouseholdAuthority @default(active)
   createdAt    DateTime @default(now()) @map("created_at")
   updatedAt    DateTime @updatedAt @map("updated_at")
 
@@ -67,8 +73,9 @@ model User {
   email           String    @unique @db.VarChar(255)
   passwordHash    String    @map("password_hash") @db.VarChar(255)
   displayName     String    @map("display_name") @db.VarChar(100)
-  isAdmin         Boolean   @default(false) @map("is_admin")
-  active          Boolean   @default(true)
+  isAdmin                 Boolean   @default(false) @map("is_admin")
+  schedulingToolsEnabled  Boolean   @default(true) @map("scheduling_tools_enabled")
+  active                  Boolean   @default(true)
   emailVerifiedAt DateTime? @map("email_verified_at")
   createdAt       DateTime  @default(now()) @map("created_at")
   updatedAt       DateTime  @updatedAt @map("updated_at")
@@ -125,6 +132,8 @@ model SystemSettings {
   periodWeekCount             Int      @default(13) @map("period_week_count")
   openLeadDays                Int      @default(30) @map("open_lead_days")
   periodsToSchedule           Int      @default(4) @map("periods_to_schedule")
+  draftStartLeadDays          Int      @default(0) @map("draft_start_lead_days")
+  maxCoordinatorHouseholds    Int      @default(3) @map("max_coordinator_households")
   householdSlotCount          Int      @default(5) @map("household_slot_count")
   updatedAt                   DateTime @updatedAt @map("updated_at")
   updatedByUserId             String?  @map("updated_by_user_id") @db.Uuid
@@ -140,6 +149,8 @@ model SchedulingPeriod {
   startDate             DateTime     @map("start_date") @db.Date
   endDate               DateTime     @map("end_date") @db.Date
   openingAt             DateTime     @map("opening_at")
+  draftStartAt          DateTime?    @map("draft_start_at")
+  autoDraftPaused       Boolean      @default(false) @map("auto_draft_paused")
   status                PeriodStatus @default(scheduled)
   draftStartedAt        DateTime?    @map("draft_started_at")
   publishedAt           DateTime?    @map("published_at")
@@ -234,9 +245,24 @@ model DraftTurn {
   @@map("draft_turns")
 }
 
+model NoteCategory {
+  id        String   @id @default(uuid()) @db.Uuid
+  name      String   @db.VarChar(80)
+  slug      String   @unique @db.VarChar(80)
+  active    Boolean  @default(true)
+  sortOrder Int      @default(0) @map("sort_order")
+  createdAt DateTime @default(now()) @map("created_at")
+  updatedAt DateTime @updatedAt @map("updated_at")
+
+  notes CalendarNote[]
+
+  @@map("note_categories")
+}
+
 model CalendarNote {
   id              String   @id @default(uuid()) @db.Uuid
   householdId     String   @map("household_id") @db.Uuid
+  categoryId      String?  @map("category_id") @db.Uuid
   startDate       DateTime @map("start_date") @db.Date
   endDate         DateTime @map("end_date") @db.Date
   body            String   @db.Text
@@ -244,8 +270,9 @@ model CalendarNote {
   createdAt       DateTime @default(now()) @map("created_at")
   updatedAt       DateTime @updatedAt @map("updated_at")
 
-  household Household @relation(fields: [householdId], references: [id], onDelete: Cascade)
-  createdBy User      @relation("NoteCreator", fields: [createdByUserId], references: [id])
+  household Household     @relation(fields: [householdId], references: [id], onDelete: Cascade)
+  category  NoteCategory? @relation(fields: [categoryId], references: [id])
+  createdBy User          @relation("NoteCreator", fields: [createdByUserId], references: [id])
 
   @@index([startDate, endDate])
   @@map("calendar_notes")

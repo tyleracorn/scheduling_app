@@ -105,7 +105,7 @@ Point HTTPS at **port 3000** on the host running the `app` container. The same p
 ## Post-deploy setup
 
 1. Log in with `SEED_ADMIN_EMAIL` / `SEED_ADMIN_PASSWORD` (set on first deploy only); change password under **Settings**.
-2. **Admin → Households** — sync slot count, name/color households, mark up to **three owning households** as **Coordinator** (any active member of those households can run periods and drafts).
+2. **Admin → Households** — sync slot count, name/color households, set **authority** (coordinator/admin) on up to the configured cap. Members of coordinator households enable scheduling tools under **Settings**.
 3. **Admin → People** — invite users into households.
 4. **Admin → Email** — send a test email after configuring `SMTP_*` in `.env`.
 5. Run the [coordinator dry-run](#coordinator-dry-run) before the first real season.
@@ -155,6 +155,27 @@ docker compose start app
 
 Schedule backups with cron on the host (daily recommended).
 
+## CSV schedule exports
+
+The API writes period CSV files to `EXPORT_PATH` when configured:
+
+- **Weekly** — scheduler job (Sunday midnight cabin timezone)
+- **On publish** — each time a period is published
+
+Set in `.env`:
+
+```bash
+EXPORT_PATH=/data/exports
+```
+
+Mount your NAS shared folder into the app container at that path (see `docker-compose.nas.yml`). Any signed-in member can also download a period CSV from **Periods → Download CSV**.
+
+Example host cron to copy exports to a second location (optional):
+
+```bash
+0 3 * * 0 rsync -a /volume1/docker/cabin-scheduling/exports/ /volume1/shared/cabin-backups/csv/
+```
+
 ## Email deliverability
 
 For turn warnings and draft notifications to reach inboxes:
@@ -166,9 +187,9 @@ For turn warnings and draft notifications to reach inboxes:
 
 ## UI overview
 
-- **Settings** — personal account and calendar display preferences (all users).
-- **Periods** — period plan and scheduling operations (coordinators and admins).
-- **Admin** — users, households (coordinator flag), system defaults, email status (admins only).
+- **Settings** — personal account, scheduling-tools toggle (coordinator households), and calendar display preferences (all users).
+- **Periods** — period plan, CSV download, and scheduling operations (members with scheduling tools enabled, and admins).
+- **Admin** — users, households (authority tier), note categories, system defaults, email status (admins only).
 
 SMTP credentials are **not** stored in the database. Configure `SMTP_*` in `.env` or Docker Compose, restart the API container, then verify in Admin → Email.
 

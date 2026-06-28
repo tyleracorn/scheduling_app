@@ -54,6 +54,19 @@ export function PeriodsPage() {
     void load();
   }, [load]);
 
+  async function downloadPeriod(p: Period) {
+    setBusy(true);
+    setError(null);
+    try {
+      const safeName = p.name.replace(/[^\w.-]+/g, "_");
+      await api.exportPeriod(p.id, `${safeName}.csv`);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Download failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
   async function startDraft(id: string) {
     if (!confirm("Start the draft? Households will be notified.")) return;
     setBusy(true);
@@ -170,6 +183,14 @@ export function PeriodsPage() {
                   >
                     Open on calendar
                   </Link>
+                  <button
+                    type="button"
+                    disabled={busy}
+                    onClick={() => void downloadPeriod(p)}
+                    className="rounded border border-slate-300 px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-50"
+                  >
+                    Download CSV
+                  </button>
                   {isCoordinator && p.status === "open" && (
                     <button
                       type="button"

@@ -73,7 +73,7 @@ export function formatHousehold(h: {
   color: string;
   active: boolean;
   isWorkerBee: boolean;
-  isCoordinator: boolean;
+  authority: "active" | "coordinator" | "admin";
 }) {
   return {
     id: h.id,
@@ -81,6 +81,7 @@ export function formatHousehold(h: {
     color: h.color,
     active: h.active,
     is_worker_bee: h.isWorkerBee,
-    is_coordinator: h.isWorkerBee ? false : h.isCoordinator,
+    authority: h.isWorkerBee ? "active" : h.authority,
+    is_coordinator: h.isWorkerBee ? false : h.authority === "coordinator",
   };
 }

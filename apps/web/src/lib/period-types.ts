@@ -17,6 +17,7 @@ export type PeriodPlan = {
   rounds_per_household: number;
   periods_to_schedule: number;
   week_start_day: number;
+  draft_start_lead_days: number;
 };
 
 export type Period = {

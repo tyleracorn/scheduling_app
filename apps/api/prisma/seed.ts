@@ -33,6 +33,8 @@ async function seedBootstrap() {
       openLeadDays: 30,
       periodsToSchedule: 4,
       householdSlotCount: 5,
+      draftStartLeadDays: 0,
+      maxCoordinatorHouseholds: 3,
     },
     update: {},
   });
@@ -86,11 +88,13 @@ async function seedBootstrap() {
     orderBy: { name: "asc" },
   });
   if (firstHousehold) {
-    const hasCoordinator = await prisma.household.findFirst({ where: { isCoordinator: true } });
+    const hasCoordinator = await prisma.household.findFirst({
+      where: { authority: "coordinator" },
+    });
     if (!hasCoordinator) {
       await prisma.household.update({
         where: { id: firstHousehold.id },
-        data: { isCoordinator: true },
+        data: { authority: "coordinator" },
       });
     }
 

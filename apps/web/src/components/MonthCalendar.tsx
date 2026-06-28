@@ -102,8 +102,17 @@ export function MonthCalendar({ year, month, weeks, notes, occupancy, onSelectDa
                     )}
                     {dayNotes.length > 0 && (
                       <span
-                        className="text-[9px] bg-blue-100 text-blue-800 rounded px-1"
-                        title={`${dayNotes.length} note(s)`}
+                        className={`text-[9px] rounded px-1 ${
+                          dayNotes.some((n) => n.category_slug === "away")
+                            ? "bg-orange-100 text-orange-800"
+                            : "bg-blue-100 text-blue-800"
+                        }`}
+                        title={dayNotes
+                          .map(
+                            (n) =>
+                              `${n.household_name}${n.category_slug !== "general" ? ` (${n.category_name})` : ""}: ${n.body}`,
+                          )
+                          .join("\n")}
                       >
                         {dayNotes.length}n
                       </span>

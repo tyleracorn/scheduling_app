@@ -29,4 +29,5 @@ export const config = {
     from: process.env.SMTP_FROM ?? "noreply@example.com",
   },
   isProduction,
+  exportPath: process.env.EXPORT_PATH ?? "",
 };

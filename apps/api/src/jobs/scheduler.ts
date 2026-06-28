@@ -1,4 +1,5 @@
-import { openDuePeriods, processExpiredTurns, processTurnWarnings } from "../services/draft.js";
+import { openDuePeriods, processAutoStartDrafts, processExpiredTurns, processTurnWarnings } from "../services/draft.js";
+import { runWeeklyExportsIfDue } from "../services/export.js";
 
 const POLL_MS = 60_000;
 
@@ -7,8 +8,10 @@ let timer: ReturnType<typeof setInterval> | null = null;
 async function tick() {
   try {
     await openDuePeriods();
+    await processAutoStartDrafts();
     await processTurnWarnings();
     await processExpiredTurns();
+    await runWeeklyExportsIfDue();
   } catch (err) {
     console.error("[scheduler] tick failed:", err);
   }

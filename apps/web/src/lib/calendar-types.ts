@@ -40,6 +40,9 @@ export type CalendarNote = {
   start_date: string;
   end_date: string;
   body: string;
+  category_id: string | null;
+  category_name: string;
+  category_slug: string;
 };
 
 export type OccupancyIndicator = {
