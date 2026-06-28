@@ -1,7 +1,7 @@
 import type { PeriodStatus, Prisma } from "@prisma/client";
 import { prisma } from "../lib/prisma.js";
 import { parseDateString, toDateString } from "../lib/dates.js";
-import { DEFAULT_CATEGORY_COLOR } from "../lib/note-category.js";
+import { calendarNoteInclude, formatCalendarNote } from "../lib/format-note.js";
 import { retentionCutoffDate } from "../lib/retention.js";
 
 export type CalendarQuery = { start: string; end: string };
@@ -74,7 +74,7 @@ export async function getCalendarAggregate(query: CalendarQuery) {
   const [notes, occupancy] = await Promise.all([
     prisma.calendarNote.findMany({
       where: { startDate: { lte: rangeEnd }, endDate: { gte: minEnd } },
-      include: { household: true, category: true },
+      include: calendarNoteInclude,
       orderBy: { startDate: "asc" },
     }),
     prisma.occupancyIndicator.findMany({
@@ -93,18 +93,7 @@ export async function getCalendarAggregate(query: CalendarQuery) {
     },
     periods: periods.map((p) => formatPeriodSummary(p, activeTurnByPeriod.get(p.id))),
     weeks: periodWeeks.map((pw) => formatWeek(pw)),
-    notes: notes.map((n) => ({
-      id: n.id,
-      household_id: n.householdId,
-      household_name: n.household.name,
-      start_date: toDateString(n.startDate),
-      end_date: toDateString(n.endDate),
-      body: n.body,
-      category_id: n.categoryId,
-      category_name: n.category?.name ?? "General",
-      category_slug: n.category?.slug ?? "general",
-      category_color: n.category?.color ?? DEFAULT_CATEGORY_COLOR,
-    })),
+    notes: notes.map((n) => formatCalendarNote(n)),
     occupancy: occupancy.map((o) => ({
       id: o.id,
       household_id: o.householdId,

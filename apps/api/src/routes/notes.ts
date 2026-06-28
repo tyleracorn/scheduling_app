@@ -6,7 +6,7 @@ import { parseDateString, toDateString } from "../lib/dates.js";
 import { retentionCutoffDate } from "../lib/retention.js";
 import { prisma } from "../lib/prisma.js";
 import { requireAuth } from "../plugins/auth.js";
-import { DEFAULT_CATEGORY_COLOR } from "../lib/note-category.js";
+import { calendarNoteInclude, formatCalendarNote } from "../lib/format-note.js";
 
 const dateRangeSchema = z.object({
   start: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
@@ -27,28 +27,8 @@ function requireHouseholdId(user: { householdId: string | null }): string {
   return user.householdId;
 }
 
-function formatNote(note: {
-  id: string;
-  householdId: string;
-  startDate: Date;
-  endDate: Date;
-  body: string;
-  categoryId: string | null;
-  household: { name: string };
-  category: { id: string; name: string; slug: string; color: string } | null;
-}) {
-  return {
-    id: note.id,
-    household_id: note.householdId,
-    household_name: note.household.name,
-    start_date: toDateString(note.startDate),
-    end_date: toDateString(note.endDate),
-    body: note.body,
-    category_id: note.categoryId,
-    category_name: note.category?.name ?? "General",
-    category_slug: note.category?.slug ?? "general",
-    category_color: note.category?.color ?? DEFAULT_CATEGORY_COLOR,
-  };
+function formatNote(note: Parameters<typeof formatCalendarNote>[0]) {
+  return formatCalendarNote(note);
 }
 
 async function notesRoutes(app: FastifyInstance) {
@@ -86,7 +66,7 @@ async function notesRoutes(app: FastifyInstance) {
         startDate: { lte: rangeEnd },
         endDate: { gte: minEnd },
       },
-      include: { household: true, category: true },
+      include: calendarNoteInclude,
       orderBy: { startDate: "asc" },
     });
     return { notes: notes.map(formatNote) };
@@ -127,7 +107,7 @@ async function notesRoutes(app: FastifyInstance) {
         body: parsed.data.body,
         createdByUserId: user.id,
       },
-      include: { household: true, category: true },
+      include: calendarNoteInclude,
     });
     return { note: formatNote(note) };
   });
@@ -158,17 +138,16 @@ async function notesRoutes(app: FastifyInstance) {
         body: parsed.data.body,
         categoryId: parsed.data.category_id ?? null,
       },
-      include: { household: true, category: true },
+      include: calendarNoteInclude,
     });
     return { note: formatNote(note) };
   });
 
   app.delete("/api/v1/notes/:id", async (request, reply) => {
     const user = requireAuth(request);
-    const householdId = requireHouseholdId(user);
     const { id } = request.params as { id: string };
     const existing = await prisma.calendarNote.findUnique({ where: { id } });
-    if (!existing || existing.householdId !== householdId) {
+    if (!existing || existing.createdByUserId !== user.id) {
       throw new AppError(404, "not_found", "Note not found");
     }
     await prisma.calendarNote.delete({ where: { id } });

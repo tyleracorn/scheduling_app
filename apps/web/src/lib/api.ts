@@ -291,6 +291,8 @@ export const api = {
     }),
   calendar: (start: string, end: string) =>
     request<CalendarResponse>(`/api/v1/calendar?start=${start}&end=${end}`),
+  notes: (start: string, end: string) =>
+    request<{ notes: CalendarNote[] }>(`/api/v1/notes?start=${start}&end=${end}`),
   noteCategories: () =>
     request<{
       categories: { id: string; name: string; slug: string; color: string; sort_order: number }[];

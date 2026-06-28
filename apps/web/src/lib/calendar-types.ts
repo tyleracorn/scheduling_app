@@ -44,6 +44,8 @@ export type CalendarNote = {
   category_name: string;
   category_slug: string;
   category_color: string;
+  created_by_user_id: string;
+  created_by_name: string;
 };
 
 export type OccupancyIndicator = {

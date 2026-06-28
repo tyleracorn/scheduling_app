@@ -750,14 +750,16 @@ export function DayDetailDrawer({
                       disabled={busy}
                       compact
                     />
-                    <button
-                      type="button"
-                      disabled={busy}
-                      onClick={() => void removeNote(n.id)}
-                      className="text-xs text-red-600 hover:underline"
-                    >
-                      Delete
-                    </button>
+                    {n.created_by_user_id === user.id && (
+                      <button
+                        type="button"
+                        disabled={busy}
+                        onClick={() => void removeNote(n.id)}
+                        className="text-xs text-red-600 hover:underline"
+                      >
+                        Delete
+                      </button>
+                    )}
                   </div>
                 )}
               </li>
