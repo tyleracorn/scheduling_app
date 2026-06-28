@@ -57,6 +57,69 @@ Build and push from your PC, then pull on the NAS. Example files:
 - [`docker-compose.nas.yml`](../docker-compose.nas.yml) — `app` pulls `ghcr.io/tyleracorn/scheduling_app`, no `build`
 - [`.env.nas.example`](../.env.nas.example) — production `.env` template
 
+#### Build and push to GHCR (from your PC)
+
+Run these from the **repo root** (where the `Dockerfile` lives).
+
+1. **Log in to GHCR** (once per machine, or when your token expires):
+
+```bash
+docker login ghcr.io -u YOUR_GITHUB_USERNAME
+```
+
+Use a GitHub **Personal Access Token** with `write:packages` (and `read:packages` if the image is private). Paste the token when Docker asks for a password.
+
+2. **Choose a tag** — pick something you will remember on the NAS:
+
+| Tag style | Example | Good for |
+|-----------|---------|----------|
+| Version | `v1.2.0` | Releases you roll back to |
+| Git commit | `4686e72` | “Exactly what I built from this commit” |
+| Date | `2026-06-27` | Ad-hoc deploys |
+| `latest` | `latest` | Convenience; NAS default if `APP_IMAGE_TAG` is unset |
+
+3. **Build the image with that tag**:
+
+```bash
+# Replace TAG with your tag (e.g. v1.2.0)
+export TAG=v1.2.0
+docker build -t ghcr.io/tyleracorn/scheduling_app:$TAG .
+```
+
+Optional — also point `latest` at this build:
+
+```bash
+docker tag ghcr.io/tyleracorn/scheduling_app:$TAG ghcr.io/tyleracorn/scheduling_app:latest
+```
+
+4. **Push the tag(s) to GHCR**:
+
+```bash
+docker push ghcr.io/tyleracorn/scheduling_app:$TAG
+# if you tagged latest:
+docker push ghcr.io/tyleracorn/scheduling_app:latest
+```
+
+5. **On the NAS**, set the same tag in `.env` so compose pulls the image you just pushed:
+
+```bash
+APP_IMAGE_TAG=v1.2.0
+```
+
+Then pull and restart (see below).
+
+**Quick copy-paste** (version tag):
+
+```bash
+export TAG=v1.2.0
+docker build -t ghcr.io/tyleracorn/scheduling_app:$TAG .
+docker push ghcr.io/tyleracorn/scheduling_app:$TAG
+```
+
+If the package is new, create it on first push under GitHub → **Packages**. For a private repo, ensure the NAS login can read the package.
+
+#### Pull and run on the NAS
+
 On the NAS (only these files + `.env` are required; no full repo clone):
 
 ```bash
