@@ -89,7 +89,7 @@ export function AdminPage() {
     draft_start_lead_days: 0,
   });
   const [noteCategories, setNoteCategories] = useState<NoteCategory[]>([]);
-  const [newCategory, setNewCategory] = useState({ name: "", slug: "" });
+  const [newCategory, setNewCategory] = useState({ name: "", color: "#64748B" });
   const [email, setEmail] = useState("");
   const [householdId, setHouseholdId] = useState("");
   const [message, setMessage] = useState<string | null>(null);
@@ -591,8 +591,9 @@ export function AdminPage() {
       <section id="notes" className="mb-10 scroll-mt-16">
         <h2 className="font-medium text-slate-800 mb-1">Note categories</h2>
         <p className="text-xs text-slate-500 mb-4">
-          Categories label calendar notes. General is the default when none is set. Away is seeded for
-          travel/absence hints during draft picks.
+          Categories label calendar notes and set badge colors on the calendar. Notes without a
+          category use the default gray. The Away category is seeded for travel/absence hints during
+          draft picks.
         </p>
         <ul className="space-y-2 mb-4">
           {noteCategories.map((c) => (
@@ -600,6 +601,20 @@ export function AdminPage() {
               key={c.id}
               className="rounded-lg border border-slate-200 bg-white p-3 text-sm flex flex-wrap items-center gap-3"
             >
+              <input
+                type="color"
+                value={c.color}
+                onChange={(e) =>
+                  void api
+                    .updateNoteCategory(c.id, { color: e.target.value })
+                    .then(() => load())
+                    .catch((err) =>
+                      setError(err instanceof Error ? err.message : "Update failed"),
+                    )
+                }
+                className="w-8 h-8 rounded border border-slate-200 p-0.5"
+                title="Badge color on calendar"
+              />
               <input
                 type="text"
                 defaultValue={c.name}
@@ -613,9 +628,8 @@ export function AdminPage() {
                       );
                   }
                 }}
-                className="rounded border border-slate-300 px-2 py-1"
+                className="rounded border border-slate-300 px-2 py-1 flex-1 min-w-[8rem]"
               />
-              <code className="text-xs text-slate-500">{c.slug}</code>
               <label className="flex items-center gap-1 text-xs">
                 <input
                   type="checkbox"
@@ -637,15 +651,20 @@ export function AdminPage() {
         <form
           onSubmit={(e) => {
             e.preventDefault();
-            if (!newCategory.name.trim() || !newCategory.slug.trim()) return;
+            if (!newCategory.name.trim()) {
+              setError("Enter a category name.");
+              return;
+            }
             setBusy(true);
+            setError(null);
             void api
               .createNoteCategory({
                 name: newCategory.name.trim(),
-                slug: newCategory.slug.trim().toLowerCase().replace(/\s+/g, "-"),
+                color: newCategory.color,
               })
               .then(() => {
-                setNewCategory({ name: "", slug: "" });
+                setNewCategory({ name: "", color: "#64748B" });
+                setMessage("Category added.");
                 return load();
               })
               .catch((err) => setError(err instanceof Error ? err.message : "Create failed"))
@@ -657,24 +676,25 @@ export function AdminPage() {
             Name
             <input
               type="text"
+              required
               value={newCategory.name}
               onChange={(e) => setNewCategory((f) => ({ ...f, name: e.target.value }))}
-              className="mt-1 block rounded border border-slate-300 px-2 py-1.5"
+              className="mt-1 block rounded border border-slate-300 px-2 py-1.5 min-w-[10rem]"
+              placeholder="Away, Maintenance, …"
             />
           </label>
           <label className="text-sm">
-            Slug
+            Calendar color
             <input
-              type="text"
-              value={newCategory.slug}
-              onChange={(e) => setNewCategory((f) => ({ ...f, slug: e.target.value }))}
-              className="mt-1 block rounded border border-slate-300 px-2 py-1.5"
-              placeholder="away"
+              type="color"
+              value={newCategory.color}
+              onChange={(e) => setNewCategory((f) => ({ ...f, color: e.target.value }))}
+              className="mt-1 block w-10 h-10 rounded border border-slate-200 p-0.5"
             />
           </label>
           <button
             type="submit"
-            disabled={busy}
+            disabled={busy || !newCategory.name.trim()}
             className="rounded bg-slate-800 text-white px-4 py-2 text-sm disabled:opacity-50"
           >
             Add category

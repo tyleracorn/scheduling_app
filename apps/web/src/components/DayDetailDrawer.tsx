@@ -8,6 +8,7 @@ import {
   occupancyPickToApi,
   type OccupancyPick,
 } from "../lib/occupancy-choice";
+import { textColorForBackground } from "../lib/calendar-utils";
 import { OccupancyChoice } from "./OccupancyChoice";
 import { OccupancyDisclaimer } from "./OccupancyDisclaimer";
 
@@ -605,7 +606,13 @@ export function DayDetailDrawer({
                 <p className="font-medium text-slate-700">
                   {n.household_name}
                   {n.category_slug !== "general" && (
-                    <span className="ml-2 text-xs font-normal text-blue-700 bg-blue-50 px-1.5 py-0.5 rounded">
+                    <span
+                      className="ml-2 text-xs font-normal px-1.5 py-0.5 rounded"
+                      style={{
+                        backgroundColor: n.category_color,
+                        color: textColorForBackground(n.category_color),
+                      }}
+                    >
                       {n.category_name}
                     </span>
                   )}

@@ -3,9 +3,12 @@ import {
   assignmentsForDay,
   buildMonthGrid,
   householdInitial,
+  householdShortLabel,
+  noteHouseholdsForDay,
   notesForDay,
   occupancyForDay,
   schedulingWeekBoundariesForDay,
+  textColorForBackground,
   weekdayHeaders,
   weekForDay,
 } from "../lib/calendar-utils";
@@ -59,6 +62,7 @@ export function MonthCalendar({ year, month, weeks, notes, occupancy, onSelectDa
             const unassigned = week && !week.assignment;
             const dayNum = date.getUTCDate();
             const dayNotes = notesForDay(date, notes);
+            const noteBadges = noteHouseholdsForDay(date, notes);
             const dayOccupancy = occupancyForDay(date, occupancy);
             const occChrome = occupancyCellChrome(displayStrength, dayOccupancy);
             const boundaries = schedulingWeekBoundariesForDay(date, weeks);
@@ -100,23 +104,25 @@ export function MonthCalendar({ year, month, weeks, notes, occupancy, onSelectDa
                         ◂Wk
                       </span>
                     )}
-                    {dayNotes.length > 0 && (
+                    {noteBadges.map((n) => (
                       <span
-                        className={`text-[9px] rounded px-1 ${
-                          dayNotes.some((n) => n.category_slug === "away")
-                            ? "bg-orange-100 text-orange-800"
-                            : "bg-blue-100 text-blue-800"
-                        }`}
+                        key={n.household_id}
+                        className="text-[9px] font-semibold rounded px-1 leading-tight"
+                        style={{
+                          backgroundColor: n.category_color,
+                          color: textColorForBackground(n.category_color),
+                        }}
                         title={dayNotes
+                          .filter((d) => d.household_id === n.household_id)
                           .map(
-                            (n) =>
-                              `${n.household_name}${n.category_slug !== "general" ? ` (${n.category_name})` : ""}: ${n.body}`,
+                            (d) =>
+                              `${d.household_name}${d.category_slug !== "general" ? ` (${d.category_name})` : ""}: ${d.body}`,
                           )
                           .join("\n")}
                       >
-                        {dayNotes.length}n
+                        {householdShortLabel(n.household_name)}
                       </span>
-                    )}
+                    ))}
                   </span>
                 </div>
 

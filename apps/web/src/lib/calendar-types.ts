@@ -43,6 +43,7 @@ export type CalendarNote = {
   category_id: string | null;
   category_name: string;
   category_slug: string;
+  category_color: string;
 };
 
 export type OccupancyIndicator = {

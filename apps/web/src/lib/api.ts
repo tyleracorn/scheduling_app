@@ -18,6 +18,7 @@ export type NoteCategory = {
   id: string;
   name: string;
   slug: string;
+  color: string;
   active: boolean;
   sort_order: number;
 };
@@ -386,14 +387,20 @@ export const api = {
   },
   adminNoteCategories: () =>
     request<{ categories: NoteCategory[] }>("/api/v1/admin/note-categories"),
-  createNoteCategory: (data: { name: string; slug: string; active?: boolean; sort_order?: number }) =>
+  createNoteCategory: (data: {
+    name: string;
+    slug?: string;
+    color?: string;
+    active?: boolean;
+    sort_order?: number;
+  }) =>
     request<{ category: NoteCategory }>("/api/v1/admin/note-categories", {
       method: "POST",
       body: JSON.stringify(data),
     }),
   updateNoteCategory: (
     id: string,
-    data: Partial<{ name: string; slug: string; active: boolean; sort_order: number }>,
+    data: Partial<{ name: string; slug: string; color: string; active: boolean; sort_order: number }>,
   ) =>
     request<{ category: NoteCategory }>(`/api/v1/admin/note-categories/${id}`, {
       method: "PATCH",

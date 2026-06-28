@@ -106,6 +106,35 @@ export function householdInitial(name: string): string {
   return trimmed.charAt(0).toUpperCase();
 }
 
+/** Compact calendar badge, e.g. "Household 1" → "h1". */
+export function householdShortLabel(name: string): string {
+  const match = name.match(/household\s*(\d+)/i);
+  if (match) return `h${match[1]}`;
+  return householdInitial(name).toLowerCase();
+}
+
+export function textColorForBackground(hex: string): string {
+  const r = parseInt(hex.slice(1, 3), 16);
+  const g = parseInt(hex.slice(3, 5), 16);
+  const b = parseInt(hex.slice(5, 7), 16);
+  const luminance = (0.299 * r + 0.587 * g + 0.114 * b) / 255;
+  return luminance > 0.62 ? "#1e293b" : "#ffffff";
+}
+
+/** One representative note per household covering a day (for calendar badges). */
+export function noteHouseholdsForDay(date: Date, notes: CalendarNote[]): CalendarNote[] {
+  const dayNotes = notesForDay(date, notes);
+  const byHousehold = new Map<string, CalendarNote>();
+  for (const note of dayNotes) {
+    if (!byHousehold.has(note.household_id)) {
+      byHousehold.set(note.household_id, note);
+    }
+  }
+  return [...byHousehold.values()].sort((a, b) =>
+    a.household_name.localeCompare(b.household_name),
+  );
+}
+
 export function coveringWeeksForDay(date: Date, weeks: CalendarWeek[]): CalendarWeek[] {
   return prioritizeWeeksForDay(date, weeksCoveringDay(date, weeks));
 }
