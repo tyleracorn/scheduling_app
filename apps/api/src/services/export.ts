@@ -38,6 +38,16 @@ export async function buildPeriodExportCsv(periodId: string): Promise<string> {
     orderBy: { startDate: "asc" },
   });
 
+  const redSharing = await prisma.occupancyIndicator.findMany({
+    where: {
+      status: "red",
+      startDate: { lte: period.endDate },
+      endDate: { gte: period.startDate },
+    },
+    include: { household: true },
+    orderBy: [{ household: { name: "asc" } }, { startDate: "asc" }],
+  });
+
   const lines: string[] = [];
   lines.push("# Period");
   lines.push(csvRow(["name", "start_date", "end_date", "status"]));
@@ -73,6 +83,20 @@ export async function buildPeriodExportCsv(periodId: string): Promise<string> {
         toDateString(n.startDate),
         toDateString(n.endDate),
         n.body,
+      ]),
+    );
+  }
+  lines.push("");
+  lines.push("# Sharing (red only)");
+  lines.push("# Default: all days are green unless listed below. None/not set is omitted.");
+  lines.push(csvRow(["household", "start_date", "end_date", "status"]));
+  for (const o of redSharing) {
+    lines.push(
+      csvRow([
+        o.household.name,
+        toDateString(o.startDate),
+        toDateString(o.endDate),
+        o.status,
       ]),
     );
   }
