@@ -5,6 +5,7 @@ import { calendarPathForPeriod } from "../lib/period-navigation";
 import type { CalendarResponse, CalendarWeek } from "../lib/calendar-types";
 import { formatPeriodStatus, coveringWeeksForDay, monthRange, notesForDay, occupancyForDay } from "../lib/calendar-utils";
 import { getPeriodAttentionMessage, sidebarPeriods } from "../lib/period-attention";
+import { defaultOccupancyPick, type OccupancyPick } from "../lib/occupancy-choice";
 import { useAuth } from "../context/AuthContext";
 import { CalendarLegend } from "../components/CalendarLegend";
 import { MonthCalendar } from "../components/MonthCalendar";
@@ -33,6 +34,12 @@ export function CalendarPage() {
   } | null>(null);
   const [draftRefresh, setDraftRefresh] = useState(0);
   const [expandPeriodId, setExpandPeriodId] = useState<string | null>(null);
+  const [draftPickOccupancy, setDraftPickOccupancy] = useState<OccupancyPick>(() =>
+    defaultOccupancyPick(),
+  );
+  const [draftCoordOccupancy, setDraftCoordOccupancy] = useState<OccupancyPick>(() =>
+    defaultOccupancyPick(),
+  );
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -49,6 +56,14 @@ export function CalendarPage() {
   }, [year, month]);
 
   const refreshAll = useCallback(() => {
+    void load();
+    setDraftRefresh((n) => n + 1);
+  }, [load]);
+
+  const handleDraftAction = useCallback(() => {
+    setSelected(null);
+    setDraftPickOccupancy(defaultOccupancyPick());
+    setDraftCoordOccupancy(defaultOccupancyPick());
     void load();
     setDraftRefresh((n) => n + 1);
   }, [load]);
@@ -275,8 +290,13 @@ export function CalendarPage() {
               user={user}
               isCoordinator={user.isCoordinator || user.isAdmin}
               onChanged={refreshAll}
+              onDraftAction={handleDraftAction}
               refreshToken={draftRefresh}
               expandPeriodId={expandPeriodId}
+              pickOccupancy={draftPickOccupancy}
+              onPickOccupancyChange={setDraftPickOccupancy}
+              coordOccupancy={draftCoordOccupancy}
+              onCoordOccupancyChange={setDraftCoordOccupancy}
             />
           </aside>
         )}
@@ -284,6 +304,7 @@ export function CalendarPage() {
 
       {selected && user && (
         <DayDetailDrawer
+          key={`${selected.date}:${selected.week?.period_week_id ?? "none"}`}
           date={selected.date}
           dateLabel={selected.dateLabel}
           week={selected.week}
@@ -295,6 +316,11 @@ export function CalendarPage() {
           onClose={() => setSelected(null)}
           onChanged={refreshAll}
           draftRefreshToken={draftRefresh}
+          pickOccupancy={draftPickOccupancy}
+          onPickOccupancyChange={setDraftPickOccupancy}
+          coordOccupancy={draftCoordOccupancy}
+          onCoordOccupancyChange={setDraftCoordOccupancy}
+          onDraftAction={handleDraftAction}
         />
       )}
     </div>

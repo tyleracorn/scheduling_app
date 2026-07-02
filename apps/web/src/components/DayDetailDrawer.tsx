@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type FormEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type FormEvent } from "react";
 import { api } from "../lib/api";
 import type { AuthUser } from "../lib/api";
 import type { CalendarNote, CalendarWeek, OccupancyIndicator } from "../lib/calendar-types";
@@ -9,6 +9,7 @@ import {
   occupancyPickToApi,
   type OccupancyPick,
 } from "../lib/occupancy-choice";
+import { preferredSchedulingWeekId } from "../lib/scheduling-week-select";
 import { textColorForBackground } from "../lib/calendar-utils";
 import { OccupancyChoice } from "./OccupancyChoice";
 import { OccupancyDisclaimer } from "./OccupancyDisclaimer";
@@ -28,6 +29,11 @@ type Props = {
   onClose: () => void;
   onChanged: () => void;
   draftRefreshToken?: number;
+  pickOccupancy: OccupancyPick;
+  onPickOccupancyChange: (value: OccupancyPick) => void;
+  coordOccupancy: OccupancyPick;
+  onCoordOccupancyChange: (value: OccupancyPick) => void;
+  onDraftAction?: () => void;
 };
 
 function findPickTurnForWeek(draft: DraftState, periodWeekId: string) {
@@ -51,7 +57,16 @@ export function DayDetailDrawer({
   onClose,
   onChanged,
   draftRefreshToken,
+  pickOccupancy,
+  onPickOccupancyChange,
+  coordOccupancy,
+  onCoordOccupancyChange,
+  onDraftAction,
 }: Props) {
+  const assignWeekTouched = useRef(false);
+  const draftPickWeekTouched = useRef(false);
+  const reviseContextTouched = useRef(false);
+  const schedulingDayKey = `${date}:${week?.period_week_id ?? ""}`;
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [households, setHouseholds] = useState<Household[]>([]);
@@ -61,9 +76,10 @@ export function DayDetailDrawer({
   const [noteBody, setNoteBody] = useState("");
   const [noteCategoryId, setNoteCategoryId] = useState<string | null>(null);
   const [draft, setDraft] = useState<DraftState | null>(null);
+  const [draftLoading, setDraftLoading] = useState(false);
   const [reviseWeek, setReviseWeek] = useState("");
   const [draftPickWeekId, setDraftPickWeekId] = useState("");
-  const [pickOccupancy, setPickOccupancy] = useState<OccupancyPick>(() => defaultOccupancyPick());
+  const [reviseContextWeekId, setReviseContextWeekId] = useState("");
   const [assignOccupancy, setAssignOccupancy] = useState<OccupancyPick>(() => defaultOccupancyPick());
   const [reviseOccupancy, setReviseOccupancy] = useState<OccupancyPick>(() => defaultOccupancyPick());
   const householdId = user.householdId;
@@ -84,13 +100,15 @@ export function DayDetailDrawer({
   }, [assignWeekId, assignableWeeks, week]);
 
   useEffect(() => {
-    const preferred =
-      week &&
-      assignableWeeks.some((w) => w.period_week_id === week.period_week_id)
-        ? week.period_week_id
-        : (assignableWeeks[0]?.period_week_id ?? week?.period_week_id ?? "");
-    setAssignWeekId(preferred);
-  }, [date, week, assignableWeeks]);
+    assignWeekTouched.current = false;
+    draftPickWeekTouched.current = false;
+    reviseContextTouched.current = false;
+  }, [schedulingDayKey]);
+
+  useEffect(() => {
+    if (assignWeekTouched.current) return;
+    setAssignWeekId(preferredSchedulingWeekId(week, assignableWeeks));
+  }, [schedulingDayKey, week, assignableWeeks]);
 
   const ownsWeek = !!(week?.assignment && householdId === week.assignment.household_id);
   const myDayOccupancy = occupancy.filter((o) => o.household_id === householdId);
@@ -121,13 +139,36 @@ export function DayDetailDrawer({
     return draftPickableWeeks.find((w) => w.period_week_id === week?.period_week_id) ?? draftPickableWeeks[0] ?? week;
   }, [draftPickWeekId, draftPickableWeeks, week]);
 
+  const draftReviseWeeks = useMemo(() => {
+    if (!draft) return [];
+    return coveringWeeks.filter((w) => {
+      if (w.period_status !== "draft") return false;
+      const turn = findPickTurnForWeek(draft, w.period_week_id);
+      if (!turn) return false;
+      return isCoordinator || (householdId != null && turn.household_id === householdId);
+    });
+  }, [coveringWeeks, draft, isCoordinator, householdId]);
+
+  const reviseContextWeek = useMemo(() => {
+    if (reviseContextWeekId) {
+      return draftReviseWeeks.find((w) => w.period_week_id === reviseContextWeekId) ?? week;
+    }
+    return (
+      draftReviseWeeks.find((w) => w.period_week_id === week?.period_week_id) ??
+      draftReviseWeeks[0] ??
+      week
+    );
+  }, [reviseContextWeekId, draftReviseWeeks, week]);
+
   useEffect(() => {
-    const preferred =
-      week && draftPickableWeeks.some((w) => w.period_week_id === week.period_week_id)
-        ? week.period_week_id
-        : (draftPickableWeeks[0]?.period_week_id ?? week?.period_week_id ?? "");
-    setDraftPickWeekId(preferred);
-  }, [date, week, draftPickableWeeks]);
+    if (draftPickWeekTouched.current) return;
+    setDraftPickWeekId(preferredSchedulingWeekId(week, draftPickableWeeks));
+  }, [schedulingDayKey, week, draftPickableWeeks]);
+
+  useEffect(() => {
+    if (reviseContextTouched.current) return;
+    setReviseContextWeekId(preferredSchedulingWeekId(week, draftReviseWeeks));
+  }, [schedulingDayKey, week, draftReviseWeeks]);
 
   const isWeekAvailableForPick = !!(
     draft &&
@@ -138,7 +179,10 @@ export function DayDetailDrawer({
   const activeTurn = draft?.active_turn ?? null;
   const isMyActiveTurn =
     !!activeTurn && !!householdId && activeTurn.household_id === householdId && !draft?.on_hold;
-  const pickTurn = week && draft ? findPickTurnForWeek(draft, week.period_week_id) : undefined;
+  const pickTurn =
+    draft && reviseContextWeek
+      ? findPickTurnForWeek(draft, reviseContextWeek.period_week_id)
+      : undefined;
   const canRevisePick =
     !!pickTurn &&
     (isCoordinator || (householdId != null && pickTurn.household_id === householdId));
@@ -188,17 +232,22 @@ export function DayDetailDrawer({
   useEffect(() => {
     if (!isDraftWeek || !week) {
       setDraft(null);
+      setDraftLoading(false);
       return;
     }
+    setDraftLoading(true);
     api
       .draft(week.period_id)
-      .then((r) => {
-        setDraft(r.draft);
-        const turn = findPickTurnForWeek(r.draft, week.period_week_id);
-        setReviseWeek(turn?.period_week_id ?? "");
-      })
-      .catch(() => setDraft(null));
+      .then((r) => setDraft(r.draft))
+      .catch(() => setDraft(null))
+      .finally(() => setDraftLoading(false));
   }, [isDraftWeek, week, draftRefreshToken]);
+
+  useEffect(() => {
+    if (pickTurn?.period_week_id) {
+      setReviseWeek(pickTurn.period_week_id);
+    }
+  }, [pickTurn?.period_week_id, pickTurn?.id]);
 
   function occupancyPickForRevise(pick: OccupancyPick): "green" | "red" | null {
     if (pick === "none") return null;
@@ -310,8 +359,11 @@ export function DayDetailDrawer({
         occupancy: pickOccupancy,
         pendingWeekId: activeTurn.period_week_id,
       });
-      onChanged();
-      onClose();
+      if (onDraftAction) onDraftAction();
+      else {
+        onChanged();
+        onClose();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Pick failed");
     } finally {
@@ -328,10 +380,13 @@ export function DayDetailDrawer({
         draftPickWeek.period_id,
         activeTurn.id,
         draftPickWeek.period_week_id,
-        occupancyPickToApi(pickOccupancy),
+        occupancyPickToApi(coordOccupancy),
       );
-      onChanged();
-      onClose();
+      if (onDraftAction) onDraftAction();
+      else {
+        onChanged();
+        onClose();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Pick failed");
     } finally {
@@ -354,18 +409,21 @@ export function DayDetailDrawer({
   }
 
   async function revisePickToWeek(periodWeekId: string | null) {
-    if (!week || !pickTurn) return;
+    if (!reviseContextWeek || !pickTurn) return;
     setBusy(true);
     setError(null);
     try {
       await api.revisePick(
-        week.period_id,
+        reviseContextWeek.period_id,
         pickTurn.id,
         periodWeekId,
         periodWeekId ? occupancyPickForRevise(reviseOccupancy) : undefined,
       );
-      onChanged();
-      if (periodWeekId === null) onClose();
+      if (onDraftAction) onDraftAction();
+      else {
+        onChanged();
+        if (periodWeekId === null) onClose();
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : "Failed to revise pick");
     } finally {
@@ -425,7 +483,11 @@ export function DayDetailDrawer({
           </dl>
         )}
 
-        {canPickThisWeek && activeTurn && (
+        {draftLoading && isDraftWeek && (
+          <p className="text-xs text-indigo-700 mb-4">Updating draft…</p>
+        )}
+
+        {!draftLoading && canPickThisWeek && activeTurn && (
           <section className="mb-4 pb-4 border-b border-indigo-200">
             <h3 className="text-sm font-medium text-indigo-900 mb-2">Draft — your turn</h3>
             {activeTurn.pending_pick && activeTurn.pending_week && (
@@ -442,7 +504,10 @@ export function DayDetailDrawer({
                 </span>
                 <select
                   value={draftPickWeekId}
-                  onChange={(e) => setDraftPickWeekId(e.target.value)}
+                  onChange={(e) => {
+                    draftPickWeekTouched.current = true;
+                    setDraftPickWeekId(e.target.value);
+                  }}
                   className="mt-1 w-full rounded border border-indigo-300 px-2 py-1.5 bg-white"
                 >
                   {draftPickableWeeks.map((w) => (
@@ -458,7 +523,7 @@ export function DayDetailDrawer({
             </p>
             <OccupancyChoice
               value={pickOccupancy}
-              onChange={setPickOccupancy}
+              onChange={onPickOccupancyChange}
               scopeLabel="for this week"
               compact
             />
@@ -473,7 +538,7 @@ export function DayDetailDrawer({
           </section>
         )}
 
-        {canCoordinatorPickThisWeek && activeTurn && (
+        {!draftLoading && canCoordinatorPickThisWeek && activeTurn && (
           <section className="mb-4 pb-4 border-b border-indigo-200">
             <h3 className="text-sm font-medium text-indigo-900 mb-2">Draft — coordinator</h3>
             {draftPickableWeeks.length > 1 && (
@@ -481,7 +546,10 @@ export function DayDetailDrawer({
                 Which scheduling week?
                 <select
                   value={draftPickWeekId}
-                  onChange={(e) => setDraftPickWeekId(e.target.value)}
+                  onChange={(e) => {
+                    draftPickWeekTouched.current = true;
+                    setDraftPickWeekId(e.target.value);
+                  }}
                   className="mt-1 w-full rounded border border-indigo-300 px-2 py-1.5 bg-white"
                 >
                   {draftPickableWeeks.map((w) => (
@@ -496,8 +564,8 @@ export function DayDetailDrawer({
               Pick this week for <strong>{activeTurn.household_name}</strong> (active turn).
             </p>
             <OccupancyChoice
-              value={pickOccupancy}
-              onChange={setPickOccupancy}
+              value={coordOccupancy}
+              onChange={onCoordOccupancyChange}
               scopeLabel={`for ${activeTurn.household_name}'s week`}
               compact
             />
@@ -512,11 +580,33 @@ export function DayDetailDrawer({
           </section>
         )}
 
-        {canRevisePick && pickTurn && (
+        {!draftLoading && canRevisePick && pickTurn && reviseContextWeek && (
           <section className="mb-4 pb-4 border-b border-indigo-200">
             <h3 className="text-sm font-medium text-indigo-900 mb-2">
               {pickTurn.household_id === householdId ? "Your pick" : `${pickTurn.household_name}'s pick`}
             </h3>
+            {draftReviseWeeks.length > 1 && (
+              <label className="block text-sm mb-2">
+                Which scheduling week?
+                <span className="block text-xs font-normal text-indigo-700 mt-0.5 mb-1">
+                  This day is a handoff between two weeks — choose which pick to revise.
+                </span>
+                <select
+                  value={reviseContextWeekId}
+                  onChange={(e) => {
+                    reviseContextTouched.current = true;
+                    setReviseContextWeekId(e.target.value);
+                  }}
+                  className="mt-1 w-full rounded border border-indigo-300 px-2 py-1.5 bg-white"
+                >
+                  {draftReviseWeeks.map((w) => (
+                    <option key={w.period_week_id} value={w.period_week_id}>
+                      {w.week_start_date} – {w.week_end_date} ({w.period_name})
+                    </option>
+                  ))}
+                </select>
+              </label>
+            )}
             <p className="text-xs text-indigo-800 mb-2">
               Move to another open week or release this week back to the pool while the draft is running.
             </p>
@@ -585,7 +675,10 @@ export function DayDetailDrawer({
                 </span>
                 <select
                   value={assignWeekId}
-                  onChange={(e) => setAssignWeekId(e.target.value)}
+                  onChange={(e) => {
+                    assignWeekTouched.current = true;
+                    setAssignWeekId(e.target.value);
+                  }}
                   className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 bg-white"
                 >
                   {assignableWeeks.map((w) => (

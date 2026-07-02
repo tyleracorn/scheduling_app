@@ -9,6 +9,7 @@ import {
   periodShouldExpand,
   sidebarPeriods,
 } from "../lib/period-attention";
+import type { OccupancyPick } from "../lib/occupancy-choice";
 import { AssignmentPanel } from "./AssignmentPanel";
 import { DraftPanel } from "./DraftPanel";
 
@@ -17,8 +18,13 @@ type Props = {
   user: AuthUser;
   isCoordinator: boolean;
   onChanged: () => void;
+  onDraftAction?: () => void;
   refreshToken: number;
   expandPeriodId?: string | null;
+  pickOccupancy: OccupancyPick;
+  onPickOccupancyChange: (value: OccupancyPick) => void;
+  coordOccupancy: OccupancyPick;
+  onCoordOccupancyChange: (value: OccupancyPick) => void;
 };
 
 function PeriodToolsCard({
@@ -26,15 +32,25 @@ function PeriodToolsCard({
   user,
   isCoordinator,
   onChanged,
+  onDraftAction,
   refreshToken,
   forceExpanded,
+  pickOccupancy,
+  onPickOccupancyChange,
+  coordOccupancy,
+  onCoordOccupancyChange,
 }: {
   period: CalendarPeriod;
   user: AuthUser;
   isCoordinator: boolean;
   onChanged: () => void;
+  onDraftAction?: () => void;
   refreshToken: number;
   forceExpanded?: boolean;
+  pickOccupancy: OccupancyPick;
+  onPickOccupancyChange: (value: OccupancyPick) => void;
+  coordOccupancy: OccupancyPick;
+  onCoordOccupancyChange: (value: OccupancyPick) => void;
 }) {
   const [expanded, setExpanded] = useState(() => periodShouldExpand(period, user));
   const attention = getPeriodAttentionMessage(period, user);
@@ -101,8 +117,13 @@ function PeriodToolsCard({
               user={user}
               isCoordinator={isCoordinator}
               onChanged={onChanged}
+              onDraftAction={onDraftAction}
               refreshToken={refreshToken}
               embedded
+              pickOccupancy={pickOccupancy}
+              onPickOccupancyChange={onPickOccupancyChange}
+              coordOccupancy={coordOccupancy}
+              onCoordOccupancyChange={onCoordOccupancyChange}
             />
           )}
         </div>
@@ -129,8 +150,13 @@ export function PeriodToolsPanel({
   user,
   isCoordinator,
   onChanged,
+  onDraftAction,
   refreshToken,
   expandPeriodId,
+  pickOccupancy,
+  onPickOccupancyChange,
+  coordOccupancy,
+  onCoordOccupancyChange,
 }: Props) {
   const visible = sidebarPeriods(periods);
   if (visible.length === 0) return null;
@@ -148,8 +174,13 @@ export function PeriodToolsPanel({
           user={user}
           isCoordinator={isCoordinator}
           onChanged={onChanged}
+          onDraftAction={onDraftAction}
           refreshToken={refreshToken}
           forceExpanded={expandPeriodId === period.id}
+          pickOccupancy={pickOccupancy}
+          onPickOccupancyChange={onPickOccupancyChange}
+          coordOccupancy={coordOccupancy}
+          onCoordOccupancyChange={onCoordOccupancyChange}
         />
       ))}
     </div>

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { api } from "../lib/api";
 import type { AuthUser } from "../lib/api";
 import type { CalendarNote, CalendarPeriod } from "../lib/calendar-types";
@@ -16,8 +16,13 @@ type Props = {
   user: AuthUser;
   isCoordinator: boolean;
   onChanged: () => void;
+  onDraftAction?: () => void;
   refreshToken?: number;
   embedded?: boolean;
+  pickOccupancy: OccupancyPick;
+  onPickOccupancyChange: (value: OccupancyPick) => void;
+  coordOccupancy: OccupancyPick;
+  onCoordOccupancyChange: (value: OccupancyPick) => void;
 };
 
 function findCompletedPick(draft: DraftState, householdId: string | null) {
@@ -38,18 +43,22 @@ export function DraftPanel({
   user,
   isCoordinator,
   onChanged,
+  onDraftAction,
   refreshToken,
   embedded = false,
+  pickOccupancy,
+  onPickOccupancyChange,
+  coordOccupancy,
+  onCoordOccupancyChange,
 }: Props) {
+  const turnSyncRef = useRef<{ turnId: string; pendingWeekId: string | null } | null>(null);
   const [draft, setDraft] = useState<DraftState | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [selectedWeek, setSelectedWeek] = useState("");
   const [reviseWeek, setReviseWeek] = useState("");
-  const [pickOccupancy, setPickOccupancy] = useState<OccupancyPick>(() => defaultOccupancyPick());
   const [reviseOccupancy, setReviseOccupancy] = useState<OccupancyPick>(() => defaultOccupancyPick());
-  const [coordOccupancy, setCoordOccupancy] = useState<OccupancyPick>(() => defaultOccupancyPick());
   const [weekNotes, setWeekNotes] = useState<CalendarNote[]>([]);
 
   const selectedWeekMeta = draft?.available_weeks.find((w) => w.period_week_id === selectedWeek);
@@ -65,8 +74,24 @@ export function DraftPanel({
     try {
       const res = await api.draft(period.id);
       setDraft(res.draft);
-      const pending = res.draft.active_turn?.period_week_id;
-      setSelectedWeek(pending ?? "");
+      const turn = res.draft.active_turn;
+      if (!turn) {
+        turnSyncRef.current = null;
+        setSelectedWeek("");
+      } else {
+        const pending = turn.period_week_id;
+        const last = turnSyncRef.current;
+        const turnChanged =
+          !last || last.turnId !== turn.id || last.pendingWeekId !== pending;
+        turnSyncRef.current = { turnId: turn.id, pendingWeekId: pending };
+        setSelectedWeek((prev) => {
+          if (turnChanged) return pending ?? "";
+          if (prev && res.draft.available_weeks.some((w) => w.period_week_id === prev)) {
+            return prev;
+          }
+          return pending ?? "";
+        });
+      }
       const myPick = findCompletedPick(res.draft, user.householdId);
       setReviseWeek(myPick?.period_week_id ?? "");
     } catch (e) {
@@ -116,6 +141,7 @@ export function DraftPanel({
       const myPick = findCompletedPick(res.draft, user.householdId);
       setReviseWeek(myPick?.period_week_id ?? "");
       onChanged();
+      onDraftAction?.();
     } catch (e) {
       setError(e instanceof Error ? e.message : "Action failed");
     } finally {
@@ -221,7 +247,7 @@ export function DraftPanel({
           </label>
           <OccupancyChoice
             value={pickOccupancy}
-            onChange={setPickOccupancy}
+            onChange={onPickOccupancyChange}
             scopeLabel="for this week"
             compact
           />
@@ -351,7 +377,7 @@ export function DraftPanel({
           </select>
           <OccupancyChoice
             value={coordOccupancy}
-            onChange={setCoordOccupancy}
+            onChange={onCoordOccupancyChange}
             scopeLabel={`for ${turn.household_name}'s week`}
             compact
           />
