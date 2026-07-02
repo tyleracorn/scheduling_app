@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { toDateString } from "../lib/dates.js";
+import { periodBoundsFromWeeks } from "../lib/period-weeks.js";
 import { config } from "../lib/config.js";
 import { prisma } from "../lib/prisma.js";
 
@@ -48,16 +49,21 @@ export async function buildPeriodExportCsv(periodId: string): Promise<string> {
     orderBy: [{ household: { name: "asc" } }, { startDate: "asc" }],
   });
 
+  const bounds = periodBoundsFromWeeks(
+    period.weeks.map((w) => ({
+      weekStartDate: w.weekStartDate,
+      weekEndDate: w.weekEndDate,
+      sortOrder: w.sortOrder,
+    })),
+  );
+  const periodStart = bounds?.startDate ?? period.startDate;
+  const periodEnd = bounds?.endDate ?? period.endDate;
+
   const lines: string[] = [];
   lines.push("# Period");
   lines.push(csvRow(["name", "start_date", "end_date", "status"]));
   lines.push(
-    csvRow([
-      period.name,
-      toDateString(period.startDate),
-      toDateString(period.endDate),
-      period.status,
-    ]),
+    csvRow([period.name, toDateString(periodStart), toDateString(periodEnd), period.status]),
   );
   lines.push("");
   lines.push("# Assignments");

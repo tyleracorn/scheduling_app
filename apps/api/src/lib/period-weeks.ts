@@ -23,9 +23,23 @@ export function computePeriodWeeks(
         sortOrder: sortOrder++,
       });
     }
+    // periodEnd is the last week's handoff day — do not start another week on that date
+    if (weekEndDate.getTime() >= periodEnd.getTime()) break;
     cursor = addDays(cursor, 7);
   }
   return weeks;
+}
+
+/** Calendar span covered by materialized weeks (first week start → last week handoff). */
+export function periodBoundsFromWeeks(
+  weeks: { weekStartDate: Date; weekEndDate: Date; sortOrder: number }[],
+): { startDate: Date; endDate: Date } | null {
+  if (weeks.length === 0) return null;
+  const sorted = [...weeks].sort((a, b) => a.sortOrder - b.sortOrder);
+  return {
+    startDate: sorted[0]!.weekStartDate,
+    endDate: sorted[sorted.length - 1]!.weekEndDate,
+  };
 }
 
 /** Exactly `weekCount` consecutive weeks beginning at the week containing periodStart. */

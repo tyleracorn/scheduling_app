@@ -2,7 +2,7 @@ import type { PeriodStatus, Prisma } from "@prisma/client";
 import { AppError } from "../lib/errors.js";
 import { parseDateString, toDateString } from "../lib/dates.js";
 import { computeDraftStartAtFromString } from "../lib/period-schedule.js";
-import { computePeriodWeeks } from "../lib/period-weeks.js";
+import { computePeriodWeeks, periodBoundsFromWeeks } from "../lib/period-weeks.js";
 import { prisma } from "../lib/prisma.js";
 
 export async function getSystemSettings() {
@@ -28,6 +28,17 @@ export async function materializePeriodWeeks(
       sortOrder: r.sortOrder,
     })),
   });
+
+  const bounds = periodBoundsFromWeeks(rows);
+  if (bounds) {
+    await prisma.schedulingPeriod.update({
+      where: { id: periodId },
+      data: {
+        startDate: bounds.startDate,
+        endDate: bounds.endDate,
+      },
+    });
+  }
 }
 
 export async function setDefaultPriorities(periodId: string) {
@@ -50,11 +61,21 @@ type PeriodRow = Prisma.SchedulingPeriodGetPayload<{
 }>;
 
 export function formatPeriod(period: PeriodRow) {
+  const bounds = periodBoundsFromWeeks(
+    period.weeks.map((w) => ({
+      weekStartDate: w.weekStartDate,
+      weekEndDate: w.weekEndDate,
+      sortOrder: w.sortOrder,
+    })),
+  );
+  const startDate = bounds?.startDate ?? period.startDate;
+  const endDate = bounds?.endDate ?? period.endDate;
+
   return {
     id: period.id,
     name: period.name,
-    start_date: toDateString(period.startDate),
-    end_date: toDateString(period.endDate),
+    start_date: toDateString(startDate),
+    end_date: toDateString(endDate),
     opening_at: period.openingAt.toISOString(),
     draft_start_at: period.draftStartAt?.toISOString() ?? null,
     auto_draft_paused: period.autoDraftPaused,
