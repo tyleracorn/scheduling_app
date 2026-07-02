@@ -18,6 +18,33 @@ export type PeriodPlan = {
   periods_to_schedule: number;
   week_start_day: number;
   draft_start_lead_days: number;
+  generation_mode: "incremental" | "grid";
+  last_period_end: string | null;
+  next_period_start: string | null;
+  has_blocking_periods: boolean;
+};
+
+export type PeriodPlanPreviewWeek = {
+  start_date: string;
+  end_date: string;
+  span_days: number;
+  kind: "bridge" | "merged" | "normal";
+};
+
+export type PeriodPlanPreview = {
+  generation_mode: "incremental" | "grid";
+  next_period_start: string | null;
+  last_period_end: string | null;
+  periods: {
+    name: string;
+    start_date: string;
+    end_date: string;
+    week_count: number;
+    weeks: PeriodPlanPreviewWeek[];
+  }[];
+  would_create: number;
+  requested: number;
+  error: string | null;
 };
 
 export type Period = {

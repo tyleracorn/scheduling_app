@@ -1,10 +1,15 @@
 import { AppError } from "../lib/errors.js";
 import type { PeriodStatus } from "@prisma/client";
-import { addDays, parseDateString, toDateString } from "../lib/dates.js";
-import { startOfWeek } from "../lib/dates.js";
-import { computePeriodWeeksExact } from "../lib/period-weeks.js";
+import { addDays, parseDateString, startOfWeek, toDateString } from "../lib/dates.js";
+import {
+  computePeriodWeeksExact,
+  computePeriodWeeksFromContinuation,
+  periodBoundsFromWeeks,
+  weekSpanDays,
+  type PeriodWeekRow,
+} from "../lib/period-weeks.js";
 import { prisma } from "../lib/prisma.js";
-import { createPeriod, getSystemSettings } from "./periods.js";
+import { createPeriodWithWeeks, effectivePeriodBounds, getSystemSettings } from "./periods.js";
 
 /** Periods that occupy calendar time — generation must not overlap these. */
 const BLOCKING_STATUSES: PeriodStatus[] = [
@@ -15,14 +20,84 @@ const BLOCKING_STATUSES: PeriodStatus[] = [
   "published",
 ];
 
-async function findOverlappingPeriod(periodStart: Date, endDate: Date) {
-  return prisma.schedulingPeriod.findFirst({
-    where: {
-      startDate: { lte: endDate },
-      endDate: { gte: periodStart },
-      status: { in: BLOCKING_STATUSES },
-    },
+export type GenerationMode = "incremental" | "grid";
+
+type PreviewWeek = {
+  start_date: string;
+  end_date: string;
+  span_days: number;
+  kind: "bridge" | "merged" | "normal";
+};
+
+type PreviewPeriod = {
+  name: string;
+  start_date: string;
+  end_date: string;
+  week_count: number;
+  weeks: PreviewWeek[];
+};
+
+type BlockingPeriodWithWeeks = Awaited<ReturnType<typeof loadBlockingPeriodsWithWeeks>>[number];
+
+async function loadBlockingPeriodsWithWeeks() {
+  return prisma.schedulingPeriod.findMany({
+    where: { status: { in: BLOCKING_STATUSES } },
+    include: { weeks: { orderBy: { sortOrder: "asc" } } },
   });
+}
+
+function calendarRangesOverlap(
+  aStart: Date,
+  aEnd: Date,
+  bStart: Date,
+  bEnd: Date,
+): boolean {
+  return aStart.getTime() < bEnd.getTime() && aEnd.getTime() > bStart.getTime();
+}
+
+/** Latest calendar handoff across all blocking periods (uses week-derived bounds). */
+async function getBlockingCalendarEnd(): Promise<{
+  endDate: Date;
+  period: BlockingPeriodWithWeeks;
+} | null> {
+  const periods = await loadBlockingPeriodsWithWeeks();
+  if (periods.length === 0) return null;
+
+  let best = periods[0]!;
+  let bestEnd = effectivePeriodBounds(best).endDate;
+
+  for (const period of periods.slice(1)) {
+    const end = effectivePeriodBounds(period).endDate;
+    if (end.getTime() > bestEnd.getTime()) {
+      best = period;
+      bestEnd = end;
+    }
+  }
+
+  return { endDate: bestEnd, period: best };
+}
+
+async function findOverlappingPeriod(periodStart: Date, endDate: Date) {
+  const periods = await loadBlockingPeriodsWithWeeks();
+  for (const period of periods) {
+    const bounds = effectivePeriodBounds(period);
+    if (calendarRangesOverlap(bounds.startDate, bounds.endDate, periodStart, endDate)) {
+      return period;
+    }
+  }
+  return null;
+}
+
+async function findCollisionInRange(rangeStart: Date, rangeEnd: Date, excludePeriodId?: string) {
+  const periods = await loadBlockingPeriodsWithWeeks();
+  for (const period of periods) {
+    if (excludePeriodId && period.id === excludePeriodId) continue;
+    const bounds = effectivePeriodBounds(period);
+    if (calendarRangesOverlap(bounds.startDate, bounds.endDate, rangeStart, rangeEnd)) {
+      return period;
+    }
+  }
+  return null;
 }
 
 function formatBlockingStatus(status: PeriodStatus): string {
@@ -35,6 +110,141 @@ function formatBlockingStatus(status: PeriodStatus): string {
     archived: "archived",
   };
   return labels[status] ?? status;
+}
+
+function collisionErrorMessage(period: BlockingPeriodWithWeeks) {
+  const bounds = effectivePeriodBounds(period);
+  return `Period "${period.name}" starts ${toDateString(bounds.startDate)} (${formatBlockingStatus(period.status)}). Delete future unstarted periods before generating.`;
+}
+
+export function resolveGenerationMode(
+  requested: GenerationMode | undefined,
+  hasBlockingPeriods: boolean,
+): GenerationMode {
+  if (requested) return requested;
+  return hasBlockingPeriods ? "incremental" : "grid";
+}
+
+function computeNextPeriodStart(
+  lastEnd: Date | null,
+  weekStartDay: number,
+  firstWeekStart: string | null,
+  mode: GenerationMode,
+): string | null {
+  if (mode === "incremental" && lastEnd) {
+    return toDateString(lastEnd);
+  }
+  if (firstWeekStart) {
+    return toDateString(startOfWeek(parseDateString(firstWeekStart), weekStartDay));
+  }
+  return null;
+}
+
+function formatPreviewWeeks(weeks: PeriodWeekRow[]): PreviewWeek[] {
+  return weeks.map((w) => ({
+    start_date: toDateString(w.weekStartDate),
+    end_date: toDateString(w.weekEndDate),
+    span_days: weekSpanDays(w),
+    kind: w.kind ?? "normal",
+  }));
+}
+
+function computeIncrementalChainEnd(
+  lastEnd: Date,
+  weekCount: number,
+  periodsToSchedule: number,
+  weekStartDay: number,
+): Date {
+  let cursor = lastEnd;
+  for (let i = 0; i < periodsToSchedule; i++) {
+    const weeks = computePeriodWeeksFromContinuation(cursor, weekCount, weekStartDay);
+    const bounds = periodBoundsFromWeeks(weeks);
+    if (!bounds) {
+      throw new AppError(400, "validation_error", "Could not compute period chain");
+    }
+    cursor = bounds.endDate;
+  }
+  return cursor;
+}
+
+function buildIncrementalPreview(
+  lastEnd: Date,
+  weekCount: number,
+  periodsToSchedule: number,
+  weekStartDay: number,
+  existingCount: number,
+): PreviewPeriod[] {
+  const periods: PreviewPeriod[] = [];
+  let cursor = lastEnd;
+  for (let i = 0; i < periodsToSchedule; i++) {
+    const weeks = computePeriodWeeksFromContinuation(cursor, weekCount, weekStartDay);
+    const bounds = periodBoundsFromWeeks(weeks);
+    if (!bounds) break;
+    const startStr = toDateString(bounds.startDate);
+    periods.push({
+      name: `Period ${existingCount + i + 1} (${startStr})`,
+      start_date: startStr,
+      end_date: toDateString(bounds.endDate),
+      week_count: weeks.length,
+      weeks: formatPreviewWeeks(weeks),
+    });
+    cursor = bounds.endDate;
+  }
+  return periods;
+}
+
+function buildGridPreview(
+  planAnchor: Date,
+  weekCount: number,
+  periodsToSchedule: number,
+  weekStartDay: number,
+  existingCount: number,
+): PreviewPeriod[] {
+  const periods: PreviewPeriod[] = [];
+  for (let slot = 0; slot < periodsToSchedule; slot++) {
+    const periodStart = addDays(planAnchor, slot * weekCount * 7);
+    const weeks = computePeriodWeeksExact(periodStart, weekCount, weekStartDay);
+    const bounds = periodBoundsFromWeeks(weeks);
+    if (!bounds) break;
+    const startStr = toDateString(bounds.startDate);
+    periods.push({
+      name: `Period ${existingCount + slot + 1} (${startStr})`,
+      start_date: startStr,
+      end_date: toDateString(bounds.endDate),
+      week_count: weeks.length,
+      weeks: formatPreviewWeeks(weeks),
+    });
+  }
+  return periods;
+}
+
+export async function getPeriodPlanContext(generationMode?: GenerationMode) {
+  const settings = await getSystemSettings();
+  const calendarEnd = await getBlockingCalendarEnd();
+  const hasBlockingPeriods = !!calendarEnd;
+  const mode = resolveGenerationMode(generationMode, hasBlockingPeriods);
+  const firstWeekStart = settings.periodFirstWeekStart
+    ? toDateString(settings.periodFirstWeekStart)
+    : null;
+  const lastEnd = calendarEnd?.endDate ?? null;
+
+  return {
+    first_week_start: firstWeekStart,
+    weeks_per_period: settings.periodWeekCount,
+    rounds_per_household: settings.weekSelectionsPerHousehold,
+    periods_to_schedule: settings.periodsToSchedule,
+    week_start_day: settings.weekStartDay,
+    draft_start_lead_days: settings.draftStartLeadDays,
+    generation_mode: mode,
+    last_period_end: lastEnd ? toDateString(lastEnd) : null,
+    next_period_start: computeNextPeriodStart(
+      lastEnd,
+      settings.weekStartDay,
+      firstWeekStart,
+      mode,
+    ),
+    has_blocking_periods: hasBlockingPeriods,
+  };
 }
 
 export function formatPeriodPlan(settings: Awaited<ReturnType<typeof getSystemSettings>>) {
@@ -51,8 +261,7 @@ export function formatPeriodPlan(settings: Awaited<ReturnType<typeof getSystemSe
 }
 
 export async function getPeriodPlan() {
-  const settings = await getSystemSettings();
-  return formatPeriodPlan(settings);
+  return getPeriodPlanContext();
 }
 
 export async function savePeriodPlan(input: {
@@ -95,9 +304,116 @@ export async function savePeriodPlan(input: {
   return getPeriodPlan();
 }
 
+async function generateGridPeriods(
+  createdByUserId: string,
+  settings: Awaited<ReturnType<typeof getSystemSettings>>,
+) {
+  if (!settings.periodFirstWeekStart) {
+    throw new AppError(422, "plan_incomplete", "Save a period plan with a first week start date first");
+  }
+
+  const planAnchor = startOfWeek(settings.periodFirstWeekStart, settings.weekStartDay);
+  const existingCount = await prisma.schedulingPeriod.count({
+    where: { status: { in: BLOCKING_STATUSES } },
+  });
+  const created: { id: string; name: string; start_date: string; end_date: string }[] = [];
+
+  for (let slot = 0; slot < settings.periodsToSchedule; slot++) {
+    const periodStart = addDays(planAnchor, slot * settings.periodWeekCount * 7);
+    const weeks = computePeriodWeeksExact(
+      periodStart,
+      settings.periodWeekCount,
+      settings.weekStartDay,
+    );
+    const bounds = periodBoundsFromWeeks(weeks);
+    if (!bounds) {
+      throw new AppError(400, "validation_error", "Could not compute period weeks");
+    }
+    const startStr = toDateString(bounds.startDate);
+    const endStr = toDateString(bounds.endDate);
+
+    const overlap = await findOverlappingPeriod(bounds.startDate, bounds.endDate);
+    if (overlap) {
+      throw new AppError(
+        422,
+        "period_overlap",
+        `${startStr} – ${endStr} overlaps "${overlap.name}" (${formatBlockingStatus(overlap.status)}). Fix the anchor date, delete unstarted periods, or use Replace unstarted.`,
+      );
+    }
+
+    const periodNumber = existingCount + slot + 1;
+    const period = await createPeriodWithWeeks({
+      name: `Period ${periodNumber} (${startStr})`,
+      weeks,
+      created_by_user_id: createdByUserId,
+    });
+    created.push({
+      id: period.id,
+      name: period.name,
+      start_date: period.start_date,
+      end_date: period.end_date,
+    });
+  }
+
+  return { created, skipped: [] as string[] };
+}
+
+async function generateIncrementalPeriods(
+  createdByUserId: string,
+  settings: Awaited<ReturnType<typeof getSystemSettings>>,
+  calendarEnd: NonNullable<Awaited<ReturnType<typeof getBlockingCalendarEnd>>>,
+) {
+  const chainStart = calendarEnd.endDate;
+  const chainEnd = computeIncrementalChainEnd(
+    chainStart,
+    settings.periodWeekCount,
+    settings.periodsToSchedule,
+    settings.weekStartDay,
+  );
+
+  const collision = await findCollisionInRange(chainStart, chainEnd, calendarEnd.period.id);
+  if (collision) {
+    throw new AppError(422, "period_collision", collisionErrorMessage(collision));
+  }
+
+  const existingCount = await prisma.schedulingPeriod.count({
+    where: { status: { in: BLOCKING_STATUSES } },
+  });
+  const created: { id: string; name: string; start_date: string; end_date: string }[] = [];
+  let cursor = chainStart;
+
+  for (let i = 0; i < settings.periodsToSchedule; i++) {
+    const weeks = computePeriodWeeksFromContinuation(
+      cursor,
+      settings.periodWeekCount,
+      settings.weekStartDay,
+    );
+    const bounds = periodBoundsFromWeeks(weeks);
+    if (!bounds) {
+      throw new AppError(400, "validation_error", "Could not compute period weeks");
+    }
+    const startStr = toDateString(bounds.startDate);
+    const periodNumber = existingCount + i + 1;
+    const period = await createPeriodWithWeeks({
+      name: `Period ${periodNumber} (${startStr})`,
+      weeks,
+      created_by_user_id: createdByUserId,
+    });
+    created.push({
+      id: period.id,
+      name: period.name,
+      start_date: period.start_date,
+      end_date: period.end_date,
+    });
+    cursor = bounds.endDate;
+  }
+
+  return { created, skipped: [] as string[] };
+}
+
 export async function generatePeriodsFromPlan(
   createdByUserId: string,
-  options: { replace_unstarted?: boolean } = {},
+  options: { replace_unstarted?: boolean; generation_mode?: GenerationMode } = {},
 ) {
   const settings = await getSystemSettings();
   if (!settings.periodFirstWeekStart) {
@@ -110,126 +426,87 @@ export async function generatePeriodsFromPlan(
     });
   }
 
-  const planAnchor = startOfWeek(settings.periodFirstWeekStart, settings.weekStartDay);
-  const existingCount = await prisma.schedulingPeriod.count({
-    where: { status: { in: BLOCKING_STATUSES } },
-  });
-  const created: { id: string; name: string; start_date: string; end_date: string }[] = [];
-  const skipped: string[] = [];
+  const calendarEnd = await getBlockingCalendarEnd();
+  const mode = resolveGenerationMode(options.generation_mode, !!calendarEnd);
 
-  let slot = 0;
-  let createdThisRun = 0;
-  const maxSlots = Math.max(settings.periodsToSchedule * 4, 24);
-
-  while (createdThisRun < settings.periodsToSchedule && slot < maxSlots) {
-    const periodStart = addDays(planAnchor, slot * settings.periodWeekCount * 7);
-    slot += 1;
-    const weeks = computePeriodWeeksExact(
-      periodStart,
-      settings.periodWeekCount,
-      settings.weekStartDay,
-    );
-    const endDate = weeks[weeks.length - 1].weekEndDate;
-    const startStr = toDateString(periodStart);
-    const endStr = toDateString(endDate);
-
-    const overlap = await findOverlappingPeriod(periodStart, endDate);
-    if (overlap) {
-      skipped.push(
-        `${startStr} – ${endStr} (overlaps "${overlap.name}" [${formatBlockingStatus(overlap.status)}] — change week start day/first start, delete unstarted periods, or use Replace unstarted)`,
-      );
-      continue;
-    }
-
-    const periodNumber = existingCount + createdThisRun + 1;
-    const period = await createPeriod({
-      name: `Period ${periodNumber} (${startStr})`,
-      start_date: startStr,
-      end_date: endStr,
-      created_by_user_id: createdByUserId,
-    });
-    created.push({
-      id: period.id,
-      name: period.name,
-      start_date: period.start_date,
-      end_date: period.end_date,
-    });
-    createdThisRun += 1;
+  if (mode === "incremental" && calendarEnd) {
+    return generateIncrementalPeriods(createdByUserId, settings, calendarEnd);
   }
 
-  if (createdThisRun < settings.periodsToSchedule) {
-    skipped.push(
-      `Only ${createdThisRun} of ${settings.periodsToSchedule} periods could be placed on the plan grid without overlapping existing periods.`,
-    );
-  }
-
-  return { created, skipped };
+  return generateGridPeriods(createdByUserId, settings);
 }
 
-export async function previewPeriodsFromPlan() {
+export async function previewPeriodsFromPlan(options: { generation_mode?: GenerationMode } = {}) {
   const settings = await getSystemSettings();
   if (!settings.periodFirstWeekStart) {
     throw new AppError(422, "plan_incomplete", "Save a period plan with a first week start date first");
   }
 
-  const planAnchor = startOfWeek(settings.periodFirstWeekStart, settings.weekStartDay);
+  const calendarEnd = await getBlockingCalendarEnd();
+  const mode = resolveGenerationMode(options.generation_mode, !!calendarEnd);
   const existingCount = await prisma.schedulingPeriod.count({
     where: { status: { in: BLOCKING_STATUSES } },
   });
 
-  const periods: {
-    name: string;
-    start_date: string;
-    end_date: string;
-    week_count: number;
-    skipped: boolean;
-    skip_reason: string | null;
-  }[] = [];
+  let periods: PreviewPeriod[] = [];
+  let error: string | null = null;
+  const lastEnd = calendarEnd?.endDate ?? null;
 
-  let slot = 0;
-  let placed = 0;
-  const maxSlots = Math.max(settings.periodsToSchedule * 4, 24);
-
-  while (placed < settings.periodsToSchedule && slot < maxSlots) {
-    const periodStart = addDays(planAnchor, slot * settings.periodWeekCount * 7);
-    slot += 1;
-    const weeks = computePeriodWeeksExact(
-      periodStart,
+  if (mode === "incremental" && calendarEnd) {
+    const chainStart = calendarEnd.endDate;
+    const chainEnd = computeIncrementalChainEnd(
+      chainStart,
       settings.periodWeekCount,
+      settings.periodsToSchedule,
       settings.weekStartDay,
     );
-    const endDate = weeks[weeks.length - 1].weekEndDate;
-    const startStr = toDateString(periodStart);
-    const endStr = toDateString(endDate);
-
-    const overlap = await findOverlappingPeriod(periodStart, endDate);
-    if (overlap) {
-      periods.push({
-        name: `Period ${existingCount + placed + 1} (${startStr})`,
-        start_date: startStr,
-        end_date: endStr,
-        week_count: weeks.length,
-        skipped: true,
-        skip_reason: `Overlaps "${overlap.name}" (${formatBlockingStatus(overlap.status)})`,
-      });
-      continue;
+    const collision = await findCollisionInRange(chainStart, chainEnd, calendarEnd.period.id);
+    if (collision) {
+      error = collisionErrorMessage(collision);
+    } else {
+      periods = buildIncrementalPreview(
+        chainStart,
+        settings.periodWeekCount,
+        settings.periodsToSchedule,
+        settings.weekStartDay,
+        existingCount,
+      );
     }
+  } else {
+    const planAnchor = startOfWeek(settings.periodFirstWeekStart, settings.weekStartDay);
+    periods = buildGridPreview(
+      planAnchor,
+      settings.periodWeekCount,
+      settings.periodsToSchedule,
+      settings.weekStartDay,
+      existingCount,
+    );
 
-    placed += 1;
-    periods.push({
-      name: `Period ${existingCount + placed} (${startStr})`,
-      start_date: startStr,
-      end_date: endStr,
-      week_count: weeks.length,
-      skipped: false,
-      skip_reason: null,
-    });
+    for (const period of periods) {
+      const overlap = await findOverlappingPeriod(
+        parseDateString(period.start_date),
+        parseDateString(period.end_date),
+      );
+      if (overlap) {
+        error = `${period.start_date} – ${period.end_date} overlaps "${overlap.name}" (${formatBlockingStatus(overlap.status)}). Fix the anchor date, delete unstarted periods, or use Replace unstarted.`;
+        break;
+      }
+    }
   }
 
   return {
+    generation_mode: mode,
+    next_period_start: computeNextPeriodStart(
+      lastEnd,
+      settings.weekStartDay,
+      toDateString(settings.periodFirstWeekStart),
+      mode,
+    ),
+    last_period_end: lastEnd ? toDateString(lastEnd) : null,
     periods,
-    would_create: placed,
+    would_create: error ? 0 : periods.length,
     requested: settings.periodsToSchedule,
+    error,
   };
 }
 

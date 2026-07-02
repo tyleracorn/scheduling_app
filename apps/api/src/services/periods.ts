@@ -2,11 +2,41 @@ import type { PeriodStatus, Prisma } from "@prisma/client";
 import { AppError } from "../lib/errors.js";
 import { parseDateString, toDateString } from "../lib/dates.js";
 import { computeDraftStartAtFromString } from "../lib/period-schedule.js";
-import { computePeriodWeeks, periodBoundsFromWeeks } from "../lib/period-weeks.js";
+import {
+  computePeriodWeeks,
+  periodBoundsFromWeeks,
+  type PeriodWeekRow,
+} from "../lib/period-weeks.js";
 import { prisma } from "../lib/prisma.js";
 
 export async function getSystemSettings() {
   return prisma.systemSettings.findUniqueOrThrow({ where: { id: 1 } });
+}
+
+export async function materializePeriodWeeksFromRows(periodId: string, rows: PeriodWeekRow[]) {
+  await prisma.periodWeek.deleteMany({ where: { schedulingPeriodId: periodId } });
+  if (rows.length === 0) {
+    throw new AppError(400, "validation_error", "Period must include at least one week");
+  }
+  await prisma.periodWeek.createMany({
+    data: rows.map((r) => ({
+      schedulingPeriodId: periodId,
+      weekStartDate: r.weekStartDate,
+      weekEndDate: r.weekEndDate,
+      sortOrder: r.sortOrder,
+    })),
+  });
+
+  const bounds = periodBoundsFromWeeks(rows);
+  if (bounds) {
+    await prisma.schedulingPeriod.update({
+      where: { id: periodId },
+      data: {
+        startDate: bounds.startDate,
+        endDate: bounds.endDate,
+      },
+    });
+  }
 }
 
 export async function materializePeriodWeeks(
@@ -60,7 +90,18 @@ type PeriodRow = Prisma.SchedulingPeriodGetPayload<{
   include: { weeks: true; priorities: { include: { household: true } } };
 }>;
 
-export function formatPeriod(period: PeriodRow) {
+type PeriodWeekSlice = {
+  weekStartDate: Date;
+  weekEndDate: Date;
+  sortOrder: number;
+};
+
+/** Calendar bounds from materialized weeks, falling back to stored period dates. */
+export function effectivePeriodBounds(period: {
+  startDate: Date;
+  endDate: Date;
+  weeks: PeriodWeekSlice[];
+}): { startDate: Date; endDate: Date } {
   const bounds = periodBoundsFromWeeks(
     period.weeks.map((w) => ({
       weekStartDate: w.weekStartDate,
@@ -68,8 +109,14 @@ export function formatPeriod(period: PeriodRow) {
       sortOrder: w.sortOrder,
     })),
   );
-  const startDate = bounds?.startDate ?? period.startDate;
-  const endDate = bounds?.endDate ?? period.endDate;
+  return {
+    startDate: bounds?.startDate ?? period.startDate,
+    endDate: bounds?.endDate ?? period.endDate,
+  };
+}
+
+export function formatPeriod(period: PeriodRow) {
+  const { startDate, endDate } = effectivePeriodBounds(period);
 
   return {
     id: period.id,
@@ -150,6 +197,41 @@ export async function createPeriod(input: {
     },
   });
   await materializePeriodWeeks(period.id, startDate, endDate, settings.weekStartDay);
+  await setDefaultPriorities(period.id);
+  return getPeriodDetail(period.id);
+}
+
+export async function createPeriodWithWeeks(input: {
+  name: string;
+  weeks: PeriodWeekRow[];
+  opening_at?: string;
+  draft_start_at?: string;
+  created_by_user_id: string;
+}) {
+  const bounds = periodBoundsFromWeeks(input.weeks);
+  if (!bounds) {
+    throw new AppError(400, "validation_error", "Period must include at least one week");
+  }
+  const settings = await getSystemSettings();
+  const now = new Date();
+  const openingAt = input.opening_at ? new Date(input.opening_at) : now;
+  const draftStartAt =
+    input.draft_start_at != null
+      ? new Date(input.draft_start_at)
+      : computeDraftStartAtFromString(toDateString(bounds.startDate), settings.draftStartLeadDays);
+
+  const period = await prisma.schedulingPeriod.create({
+    data: {
+      name: input.name,
+      startDate: bounds.startDate,
+      endDate: bounds.endDate,
+      openingAt,
+      draftStartAt,
+      status: "open",
+      createdByUserId: input.created_by_user_id,
+    },
+  });
+  await materializePeriodWeeksFromRows(period.id, input.weeks);
   await setDefaultPriorities(period.id);
   return getPeriodDetail(period.id);
 }

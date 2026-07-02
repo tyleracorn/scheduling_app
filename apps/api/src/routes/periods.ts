@@ -89,6 +89,11 @@ const planSchema = z.object({
 
 const generateSchema = z.object({
   replace_unstarted: z.boolean().optional(),
+  generation_mode: z.enum(["incremental", "grid"]).optional(),
+});
+
+const previewSchema = z.object({
+  generation_mode: z.enum(["incremental", "grid"]).optional(),
 });
 
 const assignSchema = z.object({
@@ -145,13 +150,17 @@ async function periodsRoutes(app: FastifyInstance) {
     const parsed = generateSchema.safeParse(request.body ?? {});
     const result = await generatePeriodsFromPlan(user.id, {
       replace_unstarted: parsed.data?.replace_unstarted,
+      generation_mode: parsed.data?.generation_mode,
     });
     return result;
   });
 
   app.post("/api/v1/periods/plan/preview", async (request) => {
     requireCoordinator(request);
-    return await previewPeriodsFromPlan();
+    const parsed = previewSchema.safeParse(request.body ?? {});
+    return await previewPeriodsFromPlan({
+      generation_mode: parsed.data?.generation_mode,
+    });
   });
 
   app.get("/api/v1/periods/:id", async (request) => {

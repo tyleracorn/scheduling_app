@@ -23,6 +23,31 @@ export function startOfWeek(date: Date, weekStartDay: number): Date {
   return d;
 }
 
+/** First occurrence of `weekStartDay` on or after `date` (never moves backward). */
+export function startOfWeekOnOrAfter(date: Date, weekStartDay: number): Date {
+  const d = new Date(date);
+  const day = d.getUTCDay();
+  const diff = (weekStartDay - day + 7) % 7;
+  d.setUTCDate(d.getUTCDate() + diff);
+  return d;
+}
+
+/** True when both Saturday and Sunday appear in [rangeStart, rangeEnd) (UTC civil days). */
+export function gapContainsWeekend(rangeStart: Date, rangeEnd: Date): boolean {
+  if (rangeEnd.getTime() <= rangeStart.getTime()) return false;
+  let hasSaturday = false;
+  let hasSunday = false;
+  let cursor = new Date(rangeStart);
+  while (cursor.getTime() < rangeEnd.getTime()) {
+    const dow = cursor.getUTCDay();
+    if (dow === 6) hasSaturday = true;
+    if (dow === 0) hasSunday = true;
+    if (hasSaturday && hasSunday) return true;
+    cursor = addDays(cursor, 1);
+  }
+  return false;
+}
+
 /** Weeks overlapping [rangeStart, rangeEnd] (inclusive civil dates) */
 export function weeksOverlappingRange(
   rangeStart: Date,

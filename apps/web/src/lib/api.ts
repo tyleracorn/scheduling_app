@@ -354,27 +354,22 @@ export const api = {
       method: "PUT",
       body: JSON.stringify(plan),
     }),
-  generatePeriods: (replace_unstarted?: boolean) =>
+  generatePeriods: (options?: { replace_unstarted?: boolean; generation_mode?: "incremental" | "grid" }) =>
     request<{
       created: { id: string; name: string; start_date: string; end_date: string }[];
       skipped: string[];
     }>("/api/v1/periods/generate", {
       method: "POST",
-      body: JSON.stringify({ replace_unstarted: replace_unstarted ?? false }),
+      body: JSON.stringify({
+        replace_unstarted: options?.replace_unstarted ?? false,
+        generation_mode: options?.generation_mode,
+      }),
     }),
-  previewPeriodPlan: () =>
-    request<{
-      periods: {
-        name: string;
-        start_date: string;
-        end_date: string;
-        week_count: number;
-        skipped: boolean;
-        skip_reason: string | null;
-      }[];
-      would_create: number;
-      requested: number;
-    }>("/api/v1/periods/plan/preview", { method: "POST", body: JSON.stringify({}) }),
+  previewPeriodPlan: (generation_mode?: "incremental" | "grid") =>
+    request<import("./period-types").PeriodPlanPreview>("/api/v1/periods/plan/preview", {
+      method: "POST",
+      body: JSON.stringify({ generation_mode }),
+    }),
   deletePeriod: (id: string) =>
     request<{ ok: boolean }>(`/api/v1/periods/${id}`, { method: "DELETE" }),
   resetPeriod: (id: string) =>

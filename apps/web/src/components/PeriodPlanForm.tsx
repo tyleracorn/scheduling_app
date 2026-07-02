@@ -1,7 +1,14 @@
 import { useCallback, useEffect, useState } from "react";
 import { api } from "../lib/api";
+import type { PeriodPlanPreview } from "../lib/period-types";
 
 const WEEKDAY_NAMES = ["Sunday", "Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday"];
+
+const WEEK_KIND_LABELS: Record<"bridge" | "merged" | "normal", string> = {
+  bridge: "Bridge week",
+  merged: "Merged first week",
+  normal: "Week",
+};
 
 type PeriodPlanFormProps = {
   defaultOpen?: boolean;
@@ -26,10 +33,18 @@ export function PeriodPlanForm({
     week_start_day: 0,
     draft_start_lead_days: 0,
   });
+  const [planContext, setPlanContext] = useState({
+    generation_mode: "grid" as "incremental" | "grid",
+    last_period_end: null as string | null,
+    next_period_start: null as string | null,
+    has_blocking_periods: false,
+  });
+  const [gridMode, setGridMode] = useState(false);
   const [replaceUnstarted, setReplaceUnstarted] = useState(false);
-  const [planPreview, setPlanPreview] = useState<
-    Awaited<ReturnType<typeof api.previewPeriodPlan>> | null
-  >(null);
+  const [planPreview, setPlanPreview] = useState<PeriodPlanPreview | null>(null);
+
+  const effectiveMode: "incremental" | "grid" =
+    gridMode || !planContext.has_blocking_periods ? "grid" : "incremental";
 
   const load = useCallback(async () => {
     onError?.(null);
@@ -43,6 +58,13 @@ export function PeriodPlanForm({
         week_start_day: plan.week_start_day,
         draft_start_lead_days: plan.draft_start_lead_days,
       });
+      setPlanContext({
+        generation_mode: plan.generation_mode,
+        last_period_end: plan.last_period_end,
+        next_period_start: plan.next_period_start,
+        has_blocking_periods: plan.has_blocking_periods,
+      });
+      setGridMode(plan.has_blocking_periods ? false : true);
     } catch (e) {
       onError?.(e instanceof Error ? e.message : "Failed to load period plan");
     }
@@ -59,6 +81,7 @@ export function PeriodPlanForm({
     onMessage?.(null);
     try {
       await api.savePeriodPlan(planForm);
+      await load();
       onMessage?.("Period plan saved.");
     } catch (err) {
       onError?.(err instanceof Error ? err.message : "Save failed");
@@ -73,8 +96,9 @@ export function PeriodPlanForm({
     onMessage?.(null);
     try {
       await api.savePeriodPlan(planForm);
-      const preview = await api.previewPeriodPlan();
+      const preview = await api.previewPeriodPlan(effectiveMode);
       setPlanPreview(preview);
+      await load();
     } catch (err) {
       onError?.(err instanceof Error ? err.message : "Preview failed");
     } finally {
@@ -94,19 +118,22 @@ export function PeriodPlanForm({
     onMessage?.(null);
     try {
       await api.savePeriodPlan(planForm);
-      const result = await api.generatePeriods(replaceUnstarted);
-      const parts = [`Created ${result.created.length} of ${planForm.periods_to_schedule} period(s).`];
-      if (result.skipped.length > 0) {
-        parts.push(`Skipped ${result.skipped.length}: ${result.skipped.join("; ")}`);
-      }
-      onMessage?.(parts.join(" "));
+      const result = await api.generatePeriods({
+        replace_unstarted: replaceUnstarted,
+        generation_mode: effectiveMode,
+      });
+      onMessage?.(`Created ${result.created.length} of ${planForm.periods_to_schedule} period(s).`);
+      setPlanPreview(null);
       onPeriodsGenerated?.();
+      await load();
     } catch (err) {
       onError?.(err instanceof Error ? err.message : "Generate failed");
     } finally {
       setBusy(false);
     }
   }
+
+  const showAnchorDate = effectiveMode === "grid" || !planContext.has_blocking_periods;
 
   return (
     <section className="mb-8 rounded-lg border border-slate-200 bg-slate-50">
@@ -128,22 +155,61 @@ export function PeriodPlanForm({
       {open && (
         <div className="px-5 pb-5 border-t border-slate-200">
           <p className="text-xs text-slate-500 my-4">
-            The plan grid is anchored from first period start + week start day. Generation never
-            overlaps published or in-progress periods. New periods open immediately for notes. If
-            fewer periods are created than requested, read the skip message or use Replace
-            unstarted.
+            {effectiveMode === "incremental"
+              ? "New periods continue from where the last one ended. Preview before generating — collisions with future periods will block creation."
+              : "Periods are placed on a fixed grid from the anchor date. Misaligned anchors will error instead of skipping slots."}
           </p>
           <form onSubmit={(e) => void savePlan(e)} className="space-y-3">
+            {planContext.has_blocking_periods && (
+              <div className="rounded border border-slate-200 bg-white p-3 text-sm space-y-1">
+                {planContext.last_period_end && (
+                  <p className="text-slate-700">
+                    <span className="font-medium">Last period ended:</span> {planContext.last_period_end}
+                  </p>
+                )}
+                {effectiveMode === "incremental" && planContext.next_period_start && (
+                  <p className="text-slate-700">
+                    <span className="font-medium">Next period starts:</span>{" "}
+                    {planContext.next_period_start}
+                  </p>
+                )}
+                <p className="text-xs text-slate-500">
+                  Mode: {effectiveMode === "incremental" ? "Continue after last period" : "Grid from anchor"}
+                </p>
+              </div>
+            )}
+
+            {planContext.has_blocking_periods && (
+              <label className="flex items-start gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={gridMode}
+                  onChange={(e) => {
+                    setGridMode(e.target.checked);
+                    setPlanPreview(null);
+                  }}
+                />
+                <span>
+                  Replan from anchor date (advanced). Use with Replace unstarted when regenerating a
+                  full set.
+                </span>
+              </label>
+            )}
+
             <label className="block text-sm">
               Week starts on
               <span className="block text-xs font-normal text-slate-500 mt-0.5 mb-1">
-                Shifts how weeks are cut from the first start date.
+                {effectiveMode === "incremental"
+                  ? "Changing this may create a bridge or merged first week when continuing after the last period."
+                  : "Shifts how weeks are cut from the anchor date."}
               </span>
               <select
                 value={planForm.week_start_day}
-                onChange={(e) =>
-                  setPlanForm((f) => ({ ...f, week_start_day: parseInt(e.target.value, 10) }))
-                }
+                onChange={(e) => {
+                  setPlanForm((f) => ({ ...f, week_start_day: parseInt(e.target.value, 10) }));
+                  setPlanPreview(null);
+                }}
                 className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 bg-white"
               >
                 {WEEKDAY_NAMES.map((name, i) => (
@@ -153,16 +219,23 @@ export function PeriodPlanForm({
                 ))}
               </select>
             </label>
-            <label className="block text-sm">
-              First period starts (week containing this date)
-              <input
-                type="date"
-                required
-                value={planForm.first_week_start}
-                onChange={(e) => setPlanForm((f) => ({ ...f, first_week_start: e.target.value }))}
-                className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 bg-white"
-              />
-            </label>
+
+            {showAnchorDate && (
+              <label className="block text-sm">
+                First period starts (week containing this date)
+                <input
+                  type="date"
+                  required
+                  value={planForm.first_week_start}
+                  onChange={(e) => {
+                    setPlanForm((f) => ({ ...f, first_week_start: e.target.value }));
+                    setPlanPreview(null);
+                  }}
+                  className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5 bg-white"
+                />
+              </label>
+            )}
+
             <label className="block text-sm">
               Weeks per period
               <input
@@ -262,39 +335,47 @@ export function PeriodPlanForm({
             </div>
             {planPreview && (
               <div className="mt-3 rounded border border-slate-200 bg-white p-3 text-sm">
-                <p className="font-medium text-slate-800 mb-2">
-                  Preview: {planPreview.would_create} of {planPreview.requested} period(s) would be
-                  created
-                </p>
-                <ul className="space-y-1 text-xs text-slate-600">
+                {planPreview.error ? (
+                  <p className="text-red-800 font-medium mb-2">{planPreview.error}</p>
+                ) : (
+                  <p className="font-medium text-slate-800 mb-2">
+                    Preview ({planPreview.generation_mode}): {planPreview.would_create} of{" "}
+                    {planPreview.requested} period(s) would be created
+                  </p>
+                )}
+                <ul className="space-y-2 text-xs text-slate-600">
                   {planPreview.periods.map((p) => (
                     <li key={`${p.start_date}-${p.name}`}>
-                      {p.skipped ? (
-                        <span className="text-amber-800">
-                          Skip {p.start_date} – {p.end_date} ({p.skip_reason})
-                        </span>
-                      ) : (
-                        <span>
-                          {p.name}: {p.start_date} – {p.end_date} ({p.week_count} weeks)
-                        </span>
-                      )}
+                      <p className="font-medium text-slate-700">
+                        {p.name}: {p.start_date} – {p.end_date} ({p.week_count} weeks)
+                      </p>
+                      <ul className="mt-1 ml-3 space-y-0.5">
+                        {p.weeks.map((w) => (
+                          <li key={`${w.start_date}-${w.kind}`}>
+                            {WEEK_KIND_LABELS[w.kind]} {w.start_date} – {w.end_date} ({w.span_days}{" "}
+                            days)
+                          </li>
+                        ))}
+                      </ul>
                     </li>
                   ))}
                 </ul>
               </div>
             )}
-            <label className="flex items-start gap-2 text-sm text-slate-700">
-              <input
-                type="checkbox"
-                className="mt-1"
-                checked={replaceUnstarted}
-                onChange={(e) => setReplaceUnstarted(e.target.checked)}
-              />
-              <span>
-                Replace all scheduled/open periods before generating (recommended when regenerating
-                a full set of {planForm.periods_to_schedule})
-              </span>
-            </label>
+            {(gridMode || !planContext.has_blocking_periods) && (
+              <label className="flex items-start gap-2 text-sm text-slate-700">
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={replaceUnstarted}
+                  onChange={(e) => setReplaceUnstarted(e.target.checked)}
+                />
+                <span>
+                  Replace all scheduled/open periods before generating (required when replanning
+                  from anchor over existing unstarted periods)
+                </span>
+              </label>
+            )}
           </form>
         </div>
       )}
