@@ -2,7 +2,7 @@ import { useCallback, useEffect, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import type { Period } from "../lib/period-types";
-import { calendarPathForPeriod } from "../lib/period-navigation";
+import { calendarPathForPeriod, coordinatePathForPeriod } from "../lib/period-navigation";
 import { useAuth } from "../context/AuthContext";
 import { PeriodPlanForm } from "../components/PeriodPlanForm";
 import { PeriodPriorityEditor, PeriodPriorityReadOnly } from "../components/PeriodPriorityEditor";
@@ -79,7 +79,7 @@ export function PeriodsPage() {
     try {
       await api.startDraft(id);
       const detail = await api.period(id);
-      navigate(calendarPathForPeriod(detail.period.start_date));
+      navigate(coordinatePathForPeriod(detail.period.start_date, detail.period.id));
     } catch (err) {
       setError(err instanceof Error ? err.message : "Start draft failed");
     } finally {
@@ -204,7 +204,7 @@ export function PeriodsPage() {
                   )}
                   {(p.status === "draft" || p.status === "assignment") && (
                     <Link
-                      to={calendarPathForPeriod(p.start_date)}
+                      to={coordinatePathForPeriod(p.start_date, p.id)}
                       className="rounded bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-700"
                     >
                       {p.status === "draft" ? "Pick weeks →" : "Assign weeks →"}

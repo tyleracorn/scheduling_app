@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { NotificationBell } from "./NotificationBell";
 import { useAuth } from "../context/AuthContext";
+import { useIsCoordinator } from "../hooks/useIsCoordinator";
 
 function navLinkClass({ isActive }: { isActive: boolean }) {
   return isActive
@@ -13,6 +14,7 @@ export function Layout() {
   const navigate = useNavigate();
   const location = useLocation();
   const { user, logout } = useAuth();
+  const isCoordinator = useIsCoordinator();
   const [menuOpen, setMenuOpen] = useState(false);
 
   useEffect(() => {
@@ -52,11 +54,21 @@ export function Layout() {
 
           <nav className="hidden md:flex items-center gap-4 text-sm shrink-0">
             {user && (
+              <NavLink to="/" end className={navLinkClass}>
+                Calendar
+              </NavLink>
+            )}
+            {user && isCoordinator && (
+              <NavLink to="/coordinate" className={navLinkClass}>
+                Coordinate
+              </NavLink>
+            )}
+            {user && (
               <NavLink to="/notes" className={navLinkClass}>
                 Notes
               </NavLink>
             )}
-            {user && (user.isCoordinator || user.isAdmin) && (
+            {user && isCoordinator && (
               <NavLink to="/periods" className={navLinkClass}>
                 Periods
               </NavLink>
@@ -122,6 +134,17 @@ export function Layout() {
               >
                 Calendar
               </NavLink>
+              {isCoordinator && (
+                <NavLink
+                  to="/coordinate"
+                  className={({ isActive }) =>
+                    `block rounded px-3 py-2.5 text-sm ${isActive ? "bg-slate-100 font-medium text-slate-900" : "text-slate-700 hover:bg-slate-50"}`
+                  }
+                  onClick={() => setMenuOpen(false)}
+                >
+                  Coordinate
+                </NavLink>
+              )}
               <NavLink
                 to="/notes"
                 className={({ isActive }) =>
@@ -131,7 +154,7 @@ export function Layout() {
               >
                 Notes
               </NavLink>
-              {(user.isCoordinator || user.isAdmin) && (
+              {isCoordinator && (
                 <NavLink
                   to="/periods"
                   className={({ isActive }) =>

@@ -3,7 +3,8 @@ import { Link } from "react-router-dom";
 import type { AuthUser } from "../lib/api";
 import type { CalendarPeriod } from "../lib/calendar-types";
 import { formatPeriodStatus } from "../lib/calendar-utils";
-import { calendarPathForPeriod } from "../lib/period-navigation";
+import type { CalendarViewMode } from "../lib/calendar-view-mode";
+import { coordinatePathForPeriod } from "../lib/period-navigation";
 import {
   getPeriodAttentionMessage,
   periodShouldExpand,
@@ -16,7 +17,7 @@ import { DraftPanel } from "./DraftPanel";
 type Props = {
   periods: CalendarPeriod[];
   user: AuthUser;
-  isCoordinator: boolean;
+  viewMode: CalendarViewMode;
   onChanged: () => void;
   onDraftAction?: () => void;
   refreshToken: number;
@@ -25,12 +26,14 @@ type Props = {
   onPickOccupancyChange: (value: OccupancyPick) => void;
   coordOccupancy: OccupancyPick;
   onCoordOccupancyChange: (value: OccupancyPick) => void;
+  preferredWeekId?: string | null;
+  preferredPeriodId?: string | null;
 };
 
 function PeriodToolsCard({
   period,
   user,
-  isCoordinator,
+  viewMode,
   onChanged,
   onDraftAction,
   refreshToken,
@@ -39,10 +42,12 @@ function PeriodToolsCard({
   onPickOccupancyChange,
   coordOccupancy,
   onCoordOccupancyChange,
+  preferredWeekId = null,
+  preferredPeriodId = null,
 }: {
   period: CalendarPeriod;
   user: AuthUser;
-  isCoordinator: boolean;
+  viewMode: CalendarViewMode;
   onChanged: () => void;
   onDraftAction?: () => void;
   refreshToken: number;
@@ -51,18 +56,22 @@ function PeriodToolsCard({
   onPickOccupancyChange: (value: OccupancyPick) => void;
   coordOccupancy: OccupancyPick;
   onCoordOccupancyChange: (value: OccupancyPick) => void;
+  preferredWeekId?: string | null;
+  preferredPeriodId?: string | null;
 }) {
-  const [expanded, setExpanded] = useState(() => periodShouldExpand(period, user));
-  const attention = getPeriodAttentionMessage(period, user);
-  const needsAttention = periodShouldExpand(period, user);
+  const [expanded, setExpanded] = useState(() => periodShouldExpand(period, user, viewMode));
+  const attention = getPeriodAttentionMessage(period, user, viewMode);
+  const needsAttention = periodShouldExpand(period, user, viewMode);
+  const syncedWeekId =
+    preferredWeekId && preferredPeriodId === period.id ? preferredWeekId : null;
 
   useEffect(() => {
     if (forceExpanded) setExpanded(true);
   }, [forceExpanded]);
 
   useEffect(() => {
-    if (periodShouldExpand(period, user)) setExpanded(true);
-  }, [period, user, refreshToken]);
+    if (periodShouldExpand(period, user, viewMode)) setExpanded(true);
+  }, [period, user, viewMode, refreshToken]);
 
   const statusLabel = formatPeriodStatus(period.status);
 
@@ -90,15 +99,13 @@ function PeriodToolsCard({
 
       {expanded && (
         <div className="px-4 pb-4 space-y-3 border-t border-slate-100">
-          {attention && (
-            <p className="text-xs text-amber-900 pt-3">{attention}</p>
-          )}
+          {attention && <p className="text-xs text-amber-900 pt-3">{attention}</p>}
           {period.start_date &&
             (period.status === "draft" ||
               period.status === "open" ||
               period.status === "assignment") && (
               <Link
-                to={calendarPathForPeriod(period.start_date)}
+                to={coordinatePathForPeriod(period.start_date, period.id)}
                 className="inline-block text-xs font-medium text-slate-700 underline hover:text-slate-900"
               >
                 View weeks on calendar →
@@ -106,16 +113,18 @@ function PeriodToolsCard({
             )}
           <AssignmentPanel
             period={period}
-            isCoordinator={isCoordinator}
+            user={user}
+            isCoordinator
             onChanged={onChanged}
             refreshToken={refreshToken}
             embedded
+            preferredWeekId={syncedWeekId}
           />
           {period.status === "draft" && (
             <DraftPanel
               period={period}
               user={user}
-              isCoordinator={isCoordinator}
+              viewMode={viewMode}
               onChanged={onChanged}
               onDraftAction={onDraftAction}
               refreshToken={refreshToken}
@@ -124,6 +133,7 @@ function PeriodToolsCard({
               onPickOccupancyChange={onPickOccupancyChange}
               coordOccupancy={coordOccupancy}
               onCoordOccupancyChange={onCoordOccupancyChange}
+              preferredWeekId={syncedWeekId}
             />
           )}
         </div>
@@ -133,7 +143,8 @@ function PeriodToolsCard({
         <div className="px-4 pb-3 border-t border-slate-100 pt-3">
           <AssignmentPanel
             period={period}
-            isCoordinator={isCoordinator}
+            user={user}
+            isCoordinator
             onChanged={onChanged}
             refreshToken={refreshToken}
             embedded
@@ -148,7 +159,7 @@ function PeriodToolsCard({
 export function PeriodToolsPanel({
   periods,
   user,
-  isCoordinator,
+  viewMode,
   onChanged,
   onDraftAction,
   refreshToken,
@@ -157,6 +168,8 @@ export function PeriodToolsPanel({
   onPickOccupancyChange,
   coordOccupancy,
   onCoordOccupancyChange,
+  preferredWeekId = null,
+  preferredPeriodId = null,
 }: Props) {
   const visible = sidebarPeriods(periods);
   if (visible.length === 0) return null;
@@ -165,14 +178,14 @@ export function PeriodToolsPanel({
     <div className="space-y-3">
       <h2 className="text-sm font-semibold text-slate-800">Period activity</h2>
       <p className="text-xs text-slate-500">
-        Pick weeks, assign households, and publish schedules for each season.
+        Run the draft, assign remaining weeks, and publish the schedule.
       </p>
       {visible.map((period) => (
         <PeriodToolsCard
           key={period.id}
           period={period}
           user={user}
-          isCoordinator={isCoordinator}
+          viewMode={viewMode}
           onChanged={onChanged}
           onDraftAction={onDraftAction}
           refreshToken={refreshToken}
@@ -181,6 +194,8 @@ export function PeriodToolsPanel({
           onPickOccupancyChange={onPickOccupancyChange}
           coordOccupancy={coordOccupancy}
           onCoordOccupancyChange={onCoordOccupancyChange}
+          preferredWeekId={preferredWeekId}
+          preferredPeriodId={preferredPeriodId}
         />
       ))}
     </div>

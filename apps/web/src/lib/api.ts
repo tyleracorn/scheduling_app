@@ -44,6 +44,17 @@ export type PeriodAssignmentSummary = {
   }[];
 };
 
+export type PeriodSwapRecord = {
+  id: string;
+  swapped_at: string;
+  actor_name: string;
+  week_a_start: string;
+  week_b_start: string;
+  household_a: string;
+  household_b: string;
+  reason: string;
+};
+
 export type NotificationItem = {
   id: string;
   type: string;
@@ -541,13 +552,17 @@ export const api = {
       week_b_id: string;
       occupancy_a?: "green" | "red" | null;
       occupancy_b?: "green" | "red" | null;
-      reason?: string;
+      reason: string;
     },
   ) =>
     request<{ ok: boolean }>(`/api/v1/periods/${periodId}/assignments/swap`, {
       method: "POST",
       body: JSON.stringify(data),
     }),
+  periodSwaps: (periodId: string) =>
+    request<{ period_id: string; swaps: PeriodSwapRecord[] }>(
+      `/api/v1/periods/${periodId}/swaps`,
+    ),
   publishPeriod: (periodId: string) =>
     request<{ period: { id: string; name: string; status: string; published_at: string } }>(
       `/api/v1/periods/${periodId}/publish`,

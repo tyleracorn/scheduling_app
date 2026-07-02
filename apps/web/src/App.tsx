@@ -1,11 +1,13 @@
 import { Navigate, Route, Routes } from "react-router-dom";
 import { AuthProvider, useAuth } from "./context/AuthContext";
+import { useIsCoordinator } from "./hooks/useIsCoordinator";
 import { Layout } from "./components/Layout";
 import { LoginPage } from "./pages/LoginPage";
 import { AcceptInvitePage } from "./pages/AcceptInvitePage";
 import { ForgotPasswordPage } from "./pages/ForgotPasswordPage";
 import { ResetPasswordPage } from "./pages/ResetPasswordPage";
 import { CalendarPage } from "./pages/CalendarPage";
+import { CoordinatorPage } from "./pages/CoordinatorPage";
 import { AdminPage } from "./pages/AdminPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { PeriodsPage } from "./pages/PeriodsPage";
@@ -25,6 +27,14 @@ function RequireAdmin({ children }: { children: React.ReactNode }) {
   return children;
 }
 
+function RequireCoordinator({ children }: { children: React.ReactNode }) {
+  const { loading } = useAuth();
+  const isCoordinator = useIsCoordinator();
+  if (loading) return null;
+  if (!isCoordinator) return <Navigate to="/" replace />;
+  return children;
+}
+
 function AppRoutes() {
   return (
     <Routes>
@@ -40,6 +50,14 @@ function AppRoutes() {
         }
       >
         <Route index element={<CalendarPage />} />
+        <Route
+          path="coordinate"
+          element={
+            <RequireCoordinator>
+              <CoordinatorPage />
+            </RequireCoordinator>
+          }
+        />
         <Route path="notes" element={<NotesPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="periods" element={<PeriodsPage />} />

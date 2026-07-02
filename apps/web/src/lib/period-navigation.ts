@@ -8,3 +8,10 @@ export function calendarPathForPeriod(startDate: string): string {
   const { year, month } = calendarMonthFromStartDate(startDate);
   return `/?year=${year}&month=${month}`;
 }
+
+export function coordinatePathForPeriod(startDate: string, periodId?: string): string {
+  const { year, month } = calendarMonthFromStartDate(startDate);
+  const params = new URLSearchParams({ year: String(year), month: String(month) });
+  if (periodId) params.set("period", periodId);
+  return `/coordinate?${params.toString()}`;
+}
