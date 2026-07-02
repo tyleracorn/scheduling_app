@@ -1,3 +1,4 @@
+import { useId } from "react";
 import type { OccupancyPick } from "../lib/occupancy-choice";
 
 type Props = {
@@ -9,6 +10,7 @@ type Props = {
 };
 
 export function OccupancyChoice({ value, onChange, scopeLabel, compact }: Props) {
+  const groupId = useId();
   const label = scopeLabel ? `Sharing preference ${scopeLabel}` : "Sharing preference";
   const options: { value: OccupancyPick; title: string; hint: string }[] = [
     {
@@ -45,7 +47,7 @@ export function OccupancyChoice({ value, onChange, scopeLabel, compact }: Props)
           >
             <input
               type="radio"
-              name={`occ-${scopeLabel ?? "pick"}`}
+              name={groupId}
               className="mt-0.5"
               checked={value === opt.value}
               onChange={() => onChange(opt.value)}
