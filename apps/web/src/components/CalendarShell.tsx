@@ -280,8 +280,18 @@ export function CalendarShell({ mode, title, subtitle }: CalendarShellProps) {
         )}
       </div>
 
-      <div className="lg:grid lg:grid-cols-3 lg:gap-6 lg:items-start">
-        <div className={showToolsPanel ? "lg:col-span-2 min-w-0 -mx-2 sm:mx-0" : "min-w-0 -mx-2 sm:mx-0"}>
+      <div
+        className={
+          showToolsPanel ? "lg:grid lg:grid-cols-3 lg:gap-6 lg:items-start" : undefined
+        }
+      >
+        <div
+          className={
+            showToolsPanel
+              ? "lg:col-span-2 min-w-0 -mx-2 sm:mx-0"
+              : "min-w-0 -mx-2 sm:mx-0"
+          }
+        >
           {!loading && weeks.length > 0 && (
             <div className="px-2 sm:px-0">
               <CalendarLegend schedulingWeekStartDay={schedulingWeekStartDay} />
