@@ -3,11 +3,25 @@ import { AppError } from "../lib/errors.js";
 import { parseDateString, toDateString } from "../lib/dates.js";
 import { computeDraftStartAtFromString } from "../lib/period-schedule.js";
 import {
+  mergeNewHouseholds,
+  periodQualifiesAsPredecessor,
+  prioritiesFromOrder,
+  rotateHouseholdOrder,
+} from "../lib/priority-rotation.js";
+import {
   computePeriodWeeks,
   periodBoundsFromWeeks,
   type PeriodWeekRow,
 } from "../lib/period-weeks.js";
 import { prisma } from "../lib/prisma.js";
+
+const BLOCKING_STATUSES: PeriodStatus[] = [
+  "scheduled",
+  "open",
+  "draft",
+  "assignment",
+  "published",
+];
 
 export async function getSystemSettings() {
   return prisma.systemSettings.findUniqueOrThrow({ where: { id: 1 } });
@@ -71,19 +85,110 @@ export async function materializePeriodWeeks(
   }
 }
 
-export async function setDefaultPriorities(periodId: string) {
-  const households = await prisma.household.findMany({
+export async function getActiveDraftHouseholds() {
+  return prisma.household.findMany({
     where: { active: true, isWorkerBee: false },
     orderBy: { name: "asc" },
   });
-  await prisma.periodHouseholdPriority.deleteMany({ where: { schedulingPeriodId: periodId } });
-  await prisma.periodHouseholdPriority.createMany({
-    data: households.map((h, i) => ({
-      schedulingPeriodId: periodId,
-      householdId: h.id,
-      position: i + 1,
-    })),
+}
+
+async function getPreviousPeriodForRotation(currentPeriodId: string) {
+  const current = await prisma.schedulingPeriod.findUnique({
+    where: { id: currentPeriodId },
+    include: { weeks: { orderBy: { sortOrder: "asc" } } },
   });
+  if (!current) return null;
+
+  const currentStart = effectivePeriodBounds(current).startDate;
+  const candidates = await prisma.schedulingPeriod.findMany({
+    where: {
+      id: { not: currentPeriodId },
+      status: { in: BLOCKING_STATUSES },
+    },
+    include: {
+      weeks: { orderBy: { sortOrder: "asc" } },
+      priorities: { orderBy: { position: "asc" } },
+    },
+  });
+
+  let best: (typeof candidates)[number] | null = null;
+  let bestEnd: Date | null = null;
+
+  for (const period of candidates) {
+    const end = effectivePeriodBounds(period).endDate;
+    if (!periodQualifiesAsPredecessor(end, currentStart)) continue;
+    if (!bestEnd || end.getTime() > bestEnd.getTime()) {
+      best = period;
+      bestEnd = end;
+    }
+  }
+
+  return best;
+}
+
+export async function getRotatedDefaultPriorities(
+  periodId: string,
+): Promise<{ household_id: string; position: number }[]> {
+  const activeHouseholds = await getActiveDraftHouseholds();
+  const activeIds = activeHouseholds.map((h) => h.id);
+  const activeIdSet = new Set(activeIds);
+
+  const previous = await getPreviousPeriodForRotation(periodId);
+  const previousPriorities = previous?.priorities ?? [];
+
+  if (previousPriorities.length === 0) {
+    return prioritiesFromOrder(activeIds);
+  }
+
+  const previousOrder = previousPriorities
+    .filter((p) => activeIdSet.has(p.householdId))
+    .sort((a, b) => a.position - b.position)
+    .map((p) => p.householdId);
+
+  if (previousOrder.length === 0) {
+    return prioritiesFromOrder(activeIds);
+  }
+
+  const lastPickerId = previousPriorities.reduce(
+    (best, p) => (p.position > best.position ? p : best),
+    previousPriorities[0]!,
+  ).householdId;
+
+  const rotated = rotateHouseholdOrder(
+    previousOrder,
+    activeIdSet.has(lastPickerId) ? lastPickerId : previousOrder[previousOrder.length - 1]!,
+  );
+  const merged = mergeNewHouseholds(rotated, activeIds);
+
+  return prioritiesFromOrder(merged);
+}
+
+async function applyDefaultPriorities(periodId: string) {
+  const items = await getRotatedDefaultPriorities(periodId);
+  await prisma.periodHouseholdPriority.deleteMany({ where: { schedulingPeriodId: periodId } });
+  if (items.length > 0) {
+    await prisma.periodHouseholdPriority.createMany({
+      data: items.map((i) => ({
+        schedulingPeriodId: periodId,
+        householdId: i.household_id,
+        position: i.position,
+      })),
+    });
+  }
+}
+
+export async function setDefaultPriorities(periodId: string) {
+  await applyDefaultPriorities(periodId);
+}
+
+export async function resetPeriodPriorities(periodId: string) {
+  const period = await prisma.schedulingPeriod.findUnique({ where: { id: periodId } });
+  if (!period) throw new AppError(404, "not_found", "Period not found");
+  if (period.status !== "scheduled" && period.status !== "open") {
+    throw new AppError(422, "invalid_state", "Priorities can only be reset before draft");
+  }
+  await applyDefaultPriorities(periodId);
+  return getPeriodDetail(periodId);
 }
 
 type PeriodRow = Prisma.SchedulingPeriodGetPayload<{
@@ -304,9 +409,38 @@ export async function setPeriodPriorities(
     throw new AppError(422, "invalid_state", "Priorities can only be set before draft");
   }
 
+  const activeHouseholds = await getActiveDraftHouseholds();
+  const expectedCount = activeHouseholds.length;
+  const activeIdSet = new Set(activeHouseholds.map((h) => h.id));
+
+  if (items.length !== expectedCount) {
+    throw new AppError(
+      400,
+      "validation_error",
+      `Expected ${expectedCount} household priorities, got ${items.length}`,
+    );
+  }
+
+  const householdIds = new Set(items.map((i) => i.household_id));
+  if (householdIds.size !== items.length) {
+    throw new AppError(400, "validation_error", "Duplicate households in priorities");
+  }
+
+  for (const item of items) {
+    if (!activeIdSet.has(item.household_id)) {
+      throw new AppError(400, "validation_error", "Invalid or inactive household in priorities");
+    }
+  }
+
   const positions = new Set(items.map((i) => i.position));
   if (positions.size !== items.length) {
     throw new AppError(400, "validation_error", "Duplicate positions");
+  }
+
+  for (let pos = 1; pos <= expectedCount; pos++) {
+    if (!positions.has(pos)) {
+      throw new AppError(400, "validation_error", "Positions must be consecutive from 1");
+    }
   }
 
   await prisma.periodHouseholdPriority.deleteMany({ where: { schedulingPeriodId: periodId } });

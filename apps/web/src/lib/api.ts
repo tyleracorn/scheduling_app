@@ -443,6 +443,11 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ priorities }),
     }),
+  resetPeriodPriorities: (id: string) =>
+    request<{ period: Period }>(`/api/v1/periods/${id}/priorities/reset`, {
+      method: "POST",
+      body: JSON.stringify({}),
+    }),
   startDraft: (id: string) =>
     request<{ draft: DraftState }>(`/api/v1/periods/${id}/start-draft`, { method: "POST" }),
   draft: (id: string) => request<{ draft: DraftState }>(`/api/v1/periods/${id}/draft`),

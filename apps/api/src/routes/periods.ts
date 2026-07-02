@@ -9,6 +9,7 @@ import {
   createPeriod,
   getPeriodDetail,
   listPeriods,
+  resetPeriodPriorities,
   setPeriodPriorities,
   updatePeriod,
 } from "../services/periods.js";
@@ -214,6 +215,13 @@ async function periodsRoutes(app: FastifyInstance) {
       throw new AppError(400, "validation_error", "Invalid priorities", parsed.error.flatten());
     }
     const period = await setPeriodPriorities(id, parsed.data.priorities);
+    return { period };
+  });
+
+  app.post("/api/v1/periods/:id/priorities/reset", async (request) => {
+    requireCoordinator(request);
+    const { id } = request.params as { id: string };
+    const period = await resetPeriodPriorities(id);
     return { period };
   });
 

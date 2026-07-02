@@ -5,6 +5,7 @@ import type { Period } from "../lib/period-types";
 import { calendarPathForPeriod } from "../lib/period-navigation";
 import { useAuth } from "../context/AuthContext";
 import { PeriodPlanForm } from "../components/PeriodPlanForm";
+import { PeriodPriorityEditor, PeriodPriorityReadOnly } from "../components/PeriodPriorityEditor";
 
 function statusLabel(status: string) {
   const map: Record<string, string> = {
@@ -24,6 +25,10 @@ function canDeletePeriod(status: string) {
 
 function canResetPeriod(status: string) {
   return status === "open" || status === "draft" || status === "assignment" || status === "published";
+}
+
+function canEditPriorities(status: string) {
+  return status === "scheduled" || status === "open";
 }
 
 export function PeriodsPage() {
@@ -119,6 +124,12 @@ export function PeriodsPage() {
     }
   }
 
+  function updatePeriodPriorities(periodId: string, priorities: Period["priorities"]) {
+    setPeriods((prev) =>
+      prev.map((p) => (p.id === periodId ? { ...p, priorities } : p)),
+    );
+  }
+
   return (
     <div>
       <div className="mb-4 flex flex-wrap items-center justify-between gap-4">
@@ -165,16 +176,6 @@ export function PeriodsPage() {
                   <p className="text-sm text-slate-600 mt-1">
                     {p.start_date} – {p.end_date} · {statusLabel(p.status)}
                   </p>
-                  {p.priorities && p.priorities.length > 0 && (
-                    <p className="text-xs text-slate-500 mt-2">
-                      Priority:{" "}
-                      {p.priorities
-                        .slice()
-                        .sort((a, b) => a.position - b.position)
-                        .map((x) => x.household_name)
-                        .join(" → ")}
-                    </p>
-                  )}
                 </div>
                 <div className="flex flex-wrap gap-2">
                   <Link
@@ -231,6 +232,19 @@ export function PeriodsPage() {
                   )}
                 </div>
               </div>
+              {isCoordinator && canEditPriorities(p.status) && p.priorities && (
+                <PeriodPriorityEditor
+                  periodId={p.id}
+                  priorities={p.priorities}
+                  disabled={busy}
+                  onUpdated={(priorities) => updatePeriodPriorities(p.id, priorities)}
+                  onError={setError}
+                  onMessage={setMessage}
+                />
+              )}
+              {!canEditPriorities(p.status) && p.priorities && (
+                <PeriodPriorityReadOnly priorities={p.priorities} />
+              )}
               {p.weeks && (
                 <p className="text-xs text-slate-500 mt-2">{p.weeks.length} weeks</p>
               )}
