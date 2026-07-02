@@ -15,7 +15,7 @@ import {
   resumeDraft,
   startDraft,
 } from "../services/draft.js";
-import { assignWeek, publishPeriod } from "../services/assignments.js";
+import { assignWeek, getPeriodSwapHistory, publishPeriod, swapWeeks } from "../services/assignments.js";
 
 const prisma = new PrismaClient();
 const RUN = !!process.env.DATABASE_URL;
@@ -230,6 +230,107 @@ describe("draft integration", { skip: !RUN }, () => {
       assert.equal(audit.reason, "Integration test swap");
     } finally {
       await cleanupFixture(f3);
+    }
+  });
+
+  it("member can swap published weeks with reason and audit", async () => {
+    const f4 = await createFixture();
+    try {
+      await startDraft(f4.periodId);
+      for (let i = 0; i < 3; i++) {
+        await advanceTurnWithPick(f4, i, i);
+      }
+      const unassigned = await prisma.periodWeek.findMany({
+        where: { schedulingPeriodId: f4.periodId, assignment: null },
+      });
+      for (const w of unassigned) {
+        await assignWeek(f4.periodId, w.id, f4.households[0]!.id, f4.adminId);
+      }
+      await publishPeriod(f4.periodId, f4.adminId);
+
+      const weeks = await prisma.periodWeek.findMany({
+        where: { schedulingPeriodId: f4.periodId, assignment: { isNot: null } },
+        include: { assignment: true },
+        orderBy: { sortOrder: "asc" },
+      });
+      assert.ok(weeks.length >= 2);
+      const member = f4.households[1]!;
+
+      await assert.rejects(
+        () =>
+          swapWeeks(
+            f4.periodId,
+            weeks[0]!.id,
+            weeks[1]!.id,
+            member.userId,
+            "Member",
+            false,
+            member.id,
+            undefined,
+            undefined,
+            "",
+          ),
+        (err: Error) => err.message.includes("Reason is required"),
+      );
+
+      await swapWeeks(
+        f4.periodId,
+        weeks[0]!.id,
+        weeks[1]!.id,
+        member.userId,
+        "Member User",
+        false,
+        member.id,
+        undefined,
+        undefined,
+        "Agreed trade",
+      );
+
+      const a0 = await prisma.assignment.findUniqueOrThrow({
+        where: { periodWeekId: weeks[0]!.id },
+      });
+      assert.equal(a0.source, "household_swap");
+
+      const history = await getPeriodSwapHistory(f4.periodId);
+      assert.equal(history.swaps.length, 1);
+      assert.equal(history.swaps[0]!.reason, "Agreed trade");
+    } finally {
+      await cleanupFixture(f4);
+    }
+  });
+
+  it("coordinator swap during assignment sets household_swap source", async () => {
+    const f5 = await createFixture();
+    try {
+      await startDraft(f5.periodId);
+      for (let i = 0; i < 3; i++) {
+        await advanceTurnWithPick(f5, i, i);
+      }
+      const weeks = await prisma.periodWeek.findMany({
+        where: { schedulingPeriodId: f5.periodId, assignment: { isNot: null } },
+        orderBy: { sortOrder: "asc" },
+      });
+      assert.ok(weeks.length >= 2);
+
+      await swapWeeks(
+        f5.periodId,
+        weeks[0]!.id,
+        weeks[1]!.id,
+        f5.adminId,
+        "Coordinator",
+        true,
+        f5.households[0]!.id,
+        undefined,
+        undefined,
+        "Coordinator swap in assignment",
+      );
+
+      const a0 = await prisma.assignment.findUniqueOrThrow({
+        where: { periodWeekId: weeks[0]!.id },
+      });
+      assert.equal(a0.source, "household_swap");
+    } finally {
+      await cleanupFixture(f5);
     }
   });
 });

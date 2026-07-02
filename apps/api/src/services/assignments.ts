@@ -169,6 +169,9 @@ export async function swapWeeks(
   weekIdA: string,
   weekIdB: string,
   actorUserId: string,
+  actorDisplayName: string,
+  actorIsCoordinator: boolean,
+  actorHouseholdId: string | null,
   occupancyA?: "green" | "red" | null,
   occupancyB?: "green" | "red" | null,
   reason?: string,
@@ -178,6 +181,19 @@ export async function swapWeeks(
   if (period.status !== "assignment" && period.status !== "published") {
     throw new AppError(422, "invalid_state", "Weeks can only be swapped during assignment or after publish");
   }
+
+  if (period.status === "published") {
+    if (!actorHouseholdId) {
+      throw new AppError(403, "forbidden", "You must belong to a household to swap weeks");
+    }
+  } else if (!actorIsCoordinator) {
+    throw new AppError(403, "forbidden", "Only coordinators can swap weeks during assignment");
+  }
+
+  if (!reason?.trim()) {
+    throw new AppError(400, "validation_error", "Reason is required for swaps");
+  }
+
   if (weekIdA === weekIdB) {
     throw new AppError(400, "validation_error", "Select two different weeks");
   }
@@ -204,9 +220,6 @@ export async function swapWeeks(
   }
 
   const isPublished = period.status === "published";
-  if (isPublished && !reason?.trim()) {
-    throw new AppError(400, "validation_error", "Reason is required when swapping published weeks");
-  }
 
   const rangeA = weekRangeFromDates(weekA.weekStartDate, weekA.weekEndDate);
   const rangeB = weekRangeFromDates(weekB.weekStartDate, weekB.weekEndDate);
@@ -214,11 +227,11 @@ export async function swapWeeks(
   await prisma.$transaction([
     prisma.assignment.update({
       where: { periodWeekId: weekIdA },
-      data: { householdId: hhB, source: isPublished ? "coordinator_edit" : "coordinator_manual" },
+      data: { householdId: hhB, source: "household_swap" },
     }),
     prisma.assignment.update({
       where: { periodWeekId: weekIdB },
-      data: { householdId: hhA, source: isPublished ? "coordinator_edit" : "coordinator_manual" },
+      data: { householdId: hhA, source: "household_swap" },
     }),
   ]);
 
@@ -238,34 +251,85 @@ export async function swapWeeks(
     await moveHouseholdOccupancyBetweenWeeks(hhB, rangeB, rangeA, actorUserId);
   }
 
-  if (isPublished) {
-    await prisma.auditEvent.create({
-      data: {
-        actorUserId,
-        eventType: "weeks_swapped",
-        entityType: "scheduling_period",
-        entityId: periodId,
-        after: {
-          week_a: toDateString(weekA.weekStartDate),
-          week_b: toDateString(weekB.weekStartDate),
-          household_a: weekA.assignment.household.name,
-          household_b: weekB.assignment.household.name,
-        },
-        reason: reason!.trim(),
+  await prisma.auditEvent.create({
+    data: {
+      actorUserId,
+      eventType: "weeks_swapped",
+      entityType: "scheduling_period",
+      entityId: periodId,
+      after: {
+        actor_display_name: actorDisplayName,
+        week_a: toDateString(weekA.weekStartDate),
+        week_b: toDateString(weekB.weekStartDate),
+        household_a: weekA.assignment.household.name,
+        household_b: weekB.assignment.household.name,
+        household_a_id: hhA,
+        household_b_id: hhB,
       },
+      reason: reason.trim(),
+    },
+  });
+
+  for (const hhId of [hhA, hhB]) {
+    await notifyHousehold(
+      hhId,
+      "assignment_changed",
+      "Calendar weeks swapped",
+      `${period.name}: weeks were swapped. Reason: ${reason.trim()}`,
+      { period_id: periodId },
+    );
+  }
+
+  if (isPublished) {
+    const { writePeriodExportToPath } = await import("./export.js");
+    await writePeriodExportToPath(periodId, "swap").catch((err) => {
+      console.error("[export] swap export failed:", err);
     });
-    for (const hhId of [hhA, hhB]) {
-      await notifyHousehold(
-        hhId,
-        "assignment_changed",
-        "Calendar weeks swapped",
-        `${period.name}: your week was swapped with another household. Reason: ${reason!.trim()}`,
-        { period_id: periodId },
-      );
-    }
   }
 
   return { ok: true };
+}
+
+export async function getPeriodSwapHistory(periodId: string) {
+  const period = await prisma.schedulingPeriod.findUnique({ where: { id: periodId } });
+  if (!period) throw new AppError(404, "not_found", "Period not found");
+  if (period.status !== "published" && period.status !== "assignment") {
+    return { period_id: periodId, swaps: [] };
+  }
+
+  const events = await prisma.auditEvent.findMany({
+    where: {
+      eventType: "weeks_swapped",
+      entityType: "scheduling_period",
+      entityId: periodId,
+    },
+    include: { actor: { select: { displayName: true } } },
+    orderBy: { createdAt: "desc" },
+    take: 50,
+  });
+
+  return {
+    period_id: periodId,
+    swaps: events.map((e) => {
+      const after = e.after as {
+        week_a?: string;
+        week_b?: string;
+        household_a?: string;
+        household_b?: string;
+        actor_display_name?: string;
+      } | null;
+      return {
+        id: e.id,
+        swapped_at: e.createdAt.toISOString(),
+        actor_name: after?.actor_display_name ?? e.actor.displayName,
+        week_a_start: after?.week_a ?? "",
+        week_b_start: after?.week_b ?? "",
+        household_a: after?.household_a ?? "",
+        household_b: after?.household_b ?? "",
+        reason: e.reason ?? "",
+      };
+    }),
+  };
 }
 
 export async function getPeriodAssignmentSummary(periodId: string) {

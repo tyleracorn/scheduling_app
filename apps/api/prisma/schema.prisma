@@ -34,6 +34,7 @@ enum AssignmentSource {
   draft_pick
   coordinator_manual
   coordinator_edit
+  household_swap
 }
 
 enum OccupancyStatus {

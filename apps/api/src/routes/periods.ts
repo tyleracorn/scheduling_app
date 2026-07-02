@@ -29,6 +29,7 @@ import {
   assignWeek,
   getAssignedWeeks,
   getPeriodAssignmentSummary,
+  getPeriodSwapHistory,
   getUnassignedWeeks,
   publishPeriod,
   swapWeeks,
@@ -108,7 +109,7 @@ const swapWeeksSchema = z.object({
   week_b_id: z.string().uuid(),
   occupancy_a: z.enum(["green", "red"]).nullable().optional(),
   occupancy_b: z.enum(["green", "red"]).nullable().optional(),
-  reason: z.string().min(1).max(500).optional(),
+  reason: z.string().min(1).max(500),
 });
 
 async function periodsRoutes(app: FastifyInstance) {
@@ -330,9 +331,23 @@ async function periodsRoutes(app: FastifyInstance) {
   });
 
   app.get("/api/v1/periods/:id/assignments/assigned", async (request) => {
-    requireCoordinator(request);
+    const user = requireAuth(request);
     const { id } = request.params as { id: string };
+    const period = await prisma.schedulingPeriod.findUnique({ where: { id } });
+    if (!period) throw new AppError(404, "not_found", "Period not found");
+    if (period.status === "published") {
+      return await getAssignedWeeks(id);
+    }
+    if (!user.isCoordinator) {
+      throw new AppError(403, "forbidden", "Coordinator access required");
+    }
     return await getAssignedWeeks(id);
+  });
+
+  app.get("/api/v1/periods/:id/swaps", async (request) => {
+    requireAuth(request);
+    const { id } = request.params as { id: string };
+    return await getPeriodSwapHistory(id);
   });
 
   app.get("/api/v1/periods/:id/assignments/unassigned", async (request) => {
@@ -359,7 +374,7 @@ async function periodsRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/v1/periods/:periodId/assignments/swap", async (request) => {
-    const user = requireCoordinator(request);
+    const user = requireAuth(request);
     const { periodId } = request.params as { periodId: string };
     const parsed = swapWeeksSchema.safeParse(request.body);
     if (!parsed.success) {
@@ -370,6 +385,9 @@ async function periodsRoutes(app: FastifyInstance) {
       parsed.data.week_a_id,
       parsed.data.week_b_id,
       user.id,
+      user.displayName,
+      user.isCoordinator,
+      user.householdId,
       parsed.data.occupancy_a,
       parsed.data.occupancy_b,
       parsed.data.reason,
