@@ -1,6 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
 import { toDateString } from "../lib/dates.js";
+import { formatHowAssigned } from "../lib/assignment-labels.js";
 import { periodBoundsFromWeeks } from "../lib/period-weeks.js";
 import { config } from "../lib/config.js";
 import { prisma } from "../lib/prisma.js";
@@ -67,14 +68,14 @@ export async function buildPeriodExportCsv(periodId: string): Promise<string> {
   );
   lines.push("");
   lines.push("# Assignments");
-  lines.push(csvRow(["week_start", "week_end", "household", "source"]));
+  lines.push(csvRow(["week_start", "week_end", "household", "how_assigned"]));
   for (const w of period.weeks) {
     lines.push(
       csvRow([
         toDateString(w.weekStartDate),
         toDateString(w.weekEndDate),
         w.assignment?.household.name ?? "",
-        w.assignment?.source ?? "",
+        formatHowAssigned(w.assignment?.source),
       ]),
     );
   }
@@ -106,6 +107,51 @@ export async function buildPeriodExportCsv(periodId: string): Promise<string> {
       ]),
     );
   }
+
+  const swapEvents = await prisma.auditEvent.findMany({
+    where: {
+      eventType: "weeks_swapped",
+      entityType: "scheduling_period",
+      entityId: periodId,
+    },
+    include: { actor: { select: { displayName: true } } },
+    orderBy: { createdAt: "asc" },
+  });
+
+  lines.push("");
+  lines.push("# Swap history");
+  lines.push(
+    csvRow([
+      "swapped_at",
+      "actor",
+      "week_a_start",
+      "week_a_household",
+      "week_b_start",
+      "week_b_household",
+      "reason",
+    ]),
+  );
+  for (const e of swapEvents) {
+    const after = e.after as {
+      week_a?: string;
+      week_b?: string;
+      household_a?: string;
+      household_b?: string;
+      actor_display_name?: string;
+    } | null;
+    lines.push(
+      csvRow([
+        e.createdAt.toISOString(),
+        after?.actor_display_name ?? e.actor.displayName,
+        after?.week_a ?? "",
+        after?.household_a ?? "",
+        after?.week_b ?? "",
+        after?.household_b ?? "",
+        e.reason ?? "",
+      ]),
+    );
+  }
+
   return lines.join("\n");
 }
 
