@@ -12,6 +12,7 @@ import { AdminPage } from "./pages/AdminPage";
 import { SettingsPage } from "./pages/SettingsPage";
 import { PeriodsPage } from "./pages/PeriodsPage";
 import { NotesPage } from "./pages/NotesPage";
+import { HelpPage } from "./pages/HelpPage";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -59,6 +60,7 @@ function AppRoutes() {
           }
         />
         <Route path="notes" element={<NotesPage />} />
+        <Route path="help" element={<HelpPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="periods" element={<PeriodsPage />} />
         <Route

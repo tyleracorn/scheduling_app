@@ -74,6 +74,11 @@ export function Layout() {
               </NavLink>
             )}
             {user && (
+              <NavLink to="/help" className={navLinkClass}>
+                Help
+              </NavLink>
+            )}
+            {user && (
               <NavLink to="/settings" className={navLinkClass}>
                 Settings
               </NavLink>
@@ -165,6 +170,15 @@ export function Layout() {
                   Periods
                 </NavLink>
               )}
+              <NavLink
+                to="/help"
+                className={({ isActive }) =>
+                  `block rounded px-3 py-2.5 text-sm ${isActive ? "bg-slate-100 font-medium text-slate-900" : "text-slate-700 hover:bg-slate-50"}`
+                }
+                onClick={() => setMenuOpen(false)}
+              >
+                Help
+              </NavLink>
               <NavLink
                 to="/settings"
                 className={({ isActive }) =>
