@@ -55,7 +55,7 @@ async function ensureSystemSettings() {
       pickWindowHours: 72,
       pickWarningLeadHours: 24,
       historyRetentionYears: 3,
-      periodWeekCount: 14,
+      periodWeekCount: 13,
       openLeadDays: 30,
       periodsToSchedule: 4,
       householdSlotCount: 5,
