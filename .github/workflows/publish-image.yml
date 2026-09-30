@@ -10,13 +10,12 @@ on:
         required: true
         type: string
 
-permissions:
-  contents: read
-  packages: write
-
 jobs:
   docker:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
     steps:
       - uses: actions/checkout@v4
 
@@ -28,8 +27,11 @@ jobs:
           else
             TAG="${{ github.ref_name }}"
           fi
+          # GHCR requires lowercase image names
+          IMAGE="ghcr.io/$(echo '${{ github.repository }}' | tr '[:upper:]' '[:lower:]')"
           echo "tag=$TAG" >> "$GITHUB_OUTPUT"
-          echo "Building ghcr.io/${{ github.repository }}:$TAG (+ latest)"
+          echo "image=$IMAGE" >> "$GITHUB_OUTPUT"
+          echo "Building $IMAGE:$TAG (+ latest)"
 
       - uses: docker/login-action@v3
         with:
@@ -44,7 +46,10 @@ jobs:
           context: .
           push: true
           tags: |
-            ghcr.io/${{ github.repository }}:${{ steps.meta.outputs.tag }}
-            ghcr.io/${{ github.repository }}:latest
+            ${{ steps.meta.outputs.image }}:${{ steps.meta.outputs.tag }}
+            ${{ steps.meta.outputs.image }}:latest
+          labels: |
+            org.opencontainers.image.source=https://github.com/${{ github.repository }}
+            org.opencontainers.image.revision=${{ github.sha }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
