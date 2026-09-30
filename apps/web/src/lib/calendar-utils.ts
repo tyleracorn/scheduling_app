@@ -77,14 +77,6 @@ function prioritizeWeeksForDay(date: Date, covering: CalendarWeek[]): CalendarWe
   });
 }
 
-export function assignmentForDay(
-  date: Date,
-  weeks: CalendarWeek[],
-): { week: CalendarWeek; assignment: NonNullable<CalendarWeek["assignment"]> } | null {
-  const all = assignmentsForDay(date, weeks);
-  return all[0] ?? null;
-}
-
 /** All week assignments covering a day (e.g. both households on a handoff day). */
 export function assignmentsForDay(
   date: Date,
@@ -162,17 +154,6 @@ export function notesForDay(date: Date, notes: CalendarNote[]): CalendarNote[] {
 
 export function occupancyForDay(date: Date, occupancy: OccupancyIndicator[]): OccupancyIndicator[] {
   return itemsForDay(date, occupancy);
-}
-
-/** Dominant occupancy for cell badge: red if any household marked red that day */
-export function occupancyBadgeForDay(
-  date: Date,
-  occupancy: OccupancyIndicator[],
-): "green" | "red" | null {
-  const dayItems = occupancyForDay(date, occupancy);
-  if (dayItems.length === 0) return null;
-  if (dayItems.some((o) => o.status === "red")) return "red";
-  return "green";
 }
 
 export function formatPeriodStatus(status: string): string {

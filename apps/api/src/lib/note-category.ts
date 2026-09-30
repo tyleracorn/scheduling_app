@@ -2,7 +2,7 @@ import { prisma } from "./prisma.js";
 
 const DEFAULT_CATEGORY_COLOR = "#64748B";
 
-export function slugFromName(name: string): string {
+function slugFromName(name: string): string {
   const base = name
     .trim()
     .toLowerCase()

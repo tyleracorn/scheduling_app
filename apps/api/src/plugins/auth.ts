@@ -111,6 +111,4 @@ export function requireCoordinatorHouseholdTier(request: FastifyRequest): AuthUs
   return user;
 }
 
-export { loadUser };
-
 export default fp(authPlugin, { name: "auth" });

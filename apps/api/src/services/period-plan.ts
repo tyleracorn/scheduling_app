@@ -247,19 +247,6 @@ export async function getPeriodPlanContext(generationMode?: GenerationMode) {
   };
 }
 
-export function formatPeriodPlan(settings: Awaited<ReturnType<typeof getSystemSettings>>) {
-  return {
-    first_week_start: settings.periodFirstWeekStart
-      ? toDateString(settings.periodFirstWeekStart)
-      : null,
-    weeks_per_period: settings.periodWeekCount,
-    rounds_per_household: settings.weekSelectionsPerHousehold,
-    periods_to_schedule: settings.periodsToSchedule,
-    week_start_day: settings.weekStartDay,
-    draft_start_lead_days: settings.draftStartLeadDays,
-  };
-}
-
 export async function getPeriodPlan() {
   return getPeriodPlanContext();
 }

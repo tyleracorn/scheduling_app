@@ -143,16 +143,6 @@ export const api = {
       method: "POST",
       body: JSON.stringify({ token, password }),
     }),
-  households: () =>
-    request<{
-      households: {
-        id: string;
-        name: string;
-        color: string;
-        active: boolean;
-        is_worker_bee: boolean;
-      }[];
-    }>("/api/v1/households"),
   adminHouseholds: () =>
     request<{
       households: {
@@ -165,6 +155,16 @@ export const api = {
         authority: HouseholdAuthority;
       }[];
     }>("/api/v1/admin/households"),
+  households: () =>
+    request<{
+      households: {
+        id: string;
+        name: string;
+        color: string;
+        active: boolean;
+        is_worker_bee: boolean;
+      }[];
+    }>("/api/v1/households"),
   syncHouseholds: () =>
     request<{
       households: {
@@ -342,14 +342,6 @@ export const api = {
       method: "PUT",
       body: JSON.stringify({ date, status }),
     }),
-  updateOccupancy: (
-    id: string,
-    data: { start_date: string; end_date: string; status: "green" | "red" },
-  ) =>
-    request<{ occupancy: OccupancyIndicator }>(`/api/v1/occupancy/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify(data),
-    }),
   deleteOccupancy: (id: string) =>
     request<void>(`/api/v1/occupancy/${id}`, { method: "DELETE" }),
   periodPlan: () => request<{ plan: PeriodPlan }>("/api/v1/periods/plan"),
@@ -428,24 +420,6 @@ export const api = {
     data: Partial<{ name: string; slug: string; color: string; active: boolean; sort_order: number }>,
   ) =>
     request<{ category: NoteCategory }>(`/api/v1/admin/note-categories/${id}`, {
-      method: "PATCH",
-      body: JSON.stringify(data),
-    }),
-  createPeriod: (data: {
-    name: string;
-    start_date: string;
-    end_date: string;
-    opening_at?: string;
-  }) =>
-    request<{ period: Period }>("/api/v1/periods", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
-  updatePeriod: (
-    id: string,
-    data: Partial<{ name: string; start_date: string; end_date: string; opening_at: string }>,
-  ) =>
-    request<{ period: Period }>(`/api/v1/periods/${id}`, {
       method: "PATCH",
       body: JSON.stringify(data),
     }),
@@ -568,7 +542,6 @@ export const api = {
       `/api/v1/periods/${periodId}/publish`,
       { method: "POST", body: JSON.stringify({}) },
     ),
-  systemSettings: () => request<{ settings: SystemSettings }>("/api/v1/settings"),
   notifications: (cursor?: string) => {
     const qs = cursor ? `?cursor=${encodeURIComponent(cursor)}` : "";
     return request<{ notifications: NotificationItem[]; next_cursor: string | null }>(
