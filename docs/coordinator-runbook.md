@@ -1,76 +1,47 @@
 # Coordinator Runbook
 
-Quick reference for scheduling coordinators.
+Quick reference for scheduling coordinators. For click-by-click screenshots, use in-app **Help** (`/help`). Invariants and the manual UI smoke checklist: [domain-rules.md](./domain-rules.md).
 
 ## App pages (who uses what)
 
 | Page | Audience | Purpose |
 |------|----------|---------|
-| **Settings** | Everyone | Your account (name, password), calendar display preferences |
+| **Settings** | Everyone | Account (name, password), calendar display preferences |
 | **Periods** | Coordinators & admins | Period plan, generate periods, start draft, reset/delete |
 | **Admin** | Admins only | Users, households, system defaults, email status, audit log |
 
 ## Period lifecycle
 
-1. **Configure plan** — Periods → Period plan panel (week start, weeks per period, rounds, count). Use **Preview weeks** before generating.
+1. **Configure plan** — Periods → Period plan (week start, weeks per period, rounds, count). **Preview weeks** before generating.
 2. **Generate periods** — Periods → Generate periods.
-3. **Open** — Periods auto-open at `opening_at` (scheduler). Households can add notes.
+3. **Open** — Auto-open at `opening_at`. Households can add notes.
 4. **Start draft** — Periods → Start draft when ready.
-5. **Draft** — Households pick on the calendar (click an open week) or in **Period activity** beside the calendar. Choose sharing (green/red/none), then **Confirm week** in one step. On hold after 2 consecutive auto-skips.
-6. **Assignment** — After draft, assign remaining weeks on the calendar (click unassigned days).
-7. **Publish** — Period activity panel → Publish when all weeks assigned.
+5. **Draft** — Pick from the calendar day drawer or **Period activity**. Sharing (green/red/none) + confirm. Hold after 2 consecutive auto-skips.
+6. **Assignment** — Assign remaining weeks from the calendar (click unassigned days).
+7. **Publish** — Period activity → Publish when all weeks assigned.
 
-## Calendar layout
+## Hold recovery
 
-- **Calendar grid** is the main view; month navigation stays at the top.
-- **Period activity** sidebar holds pick/assign/swap controls for each season (alternate path during draft).
-- **Click a day** to open the drawer for draft picks, notes, sharing (green/red), and coordinator assign/reassign.
-- **Sticky alerts** at the top link to the relevant period panel when action is needed.
-
-## Hold (2 consecutive auto-skips)
-
-- Draft pauses; no next turn activates.
-- **Resume draft** — Resets hold and continues (Period activity panel).
+- **Resume draft** — Continue after hold (Period activity).
 - **Force skip** — Skip the stuck household’s turn.
-- **Pick for household** — Coordinator selects a week on their behalf.
+- **Pick for household** — Select a week on their behalf.
 
-## Swap weeks (coordinator)
+## Common actions
 
-- In Period activity → expand assignment section → **Swap two assigned weeks**.
-- Required reason when swapping published weeks.
-
-## Revise pick (during draft)
-
-- Households can change a confirmed pick to another open week, or release it, while the draft is still running — in Period activity or via the day drawer.
-
-## Worker Bee
-
-- Special household for group project weeks; excluded from draft turns.
-- Coordinator assigns Worker Bee weeks manually during assignment phase.
-
-## Post-publish changes
-
-- Click any assigned week on the calendar → Reassign with a **required reason**.
-- Affected households are notified; change appears in Admin → Assignment audit log.
-
-## Reset period (testing)
-
-- **Periods → Reset period** on draft, assignment, or published periods.
-- Clears all assignments and draft turns; status returns to **Open** so you can start draft again.
-- Use for dry-runs and testing — not for routine production changes.
-
-## Manual UI smoke checklist
-
-Full checklist (drawer vs Period activity, member vs coordinator, mobile): [domain-rules.md](./domain-rules.md#manual-ui-smoke-checklist).
+- **Swap** — Period activity → swap two assigned weeks (reason required when published).
+- **Revise pick** — During draft, change or release a confirmed pick (drawer or Period activity).
+- **Worker Bee** — Excluded from draft; assign manually in assignment phase.
+- **Post-publish reassign** — Day drawer → reason required; audit + notify.
+- **Reset period** — Clears turns/assignments → Open (dry-runs only).
 
 ## Tips
 
-- Navigate to the period month via Periods → Open on calendar.
-- The month grid is always **Sunday–Saturday**; scheduling weeks use the **week start** day from the period plan (`Wk▸` / `◂Wk` markers on the calendar).
-- Pick window and warning lead are in **Admin → System** (admin edit).
-- Coordinator households are set in **Admin → Households** (max 3 owning households); all members of those households get Periods access.
-- Email notifications go out for: your turn, **deadline warning**, hold, assignment phase, publish, assignment changes.
+- Month grid is always Sunday–Saturday; scheduling weeks follow period-plan week start (`Wk▸` markers).
+- Pick window / warning lead: **Admin → System**.
+- Coordinator households: **Admin → Households** (max ~3); all members get Periods access.
 
-## Production deployment
+## Related
 
-See [production-deployment.md](./production-deployment.md) for NAS/Docker setup, backups, and email.
+- [Manual UI smoke checklist](./domain-rules.md#manual-ui-smoke-checklist)
+- [Production deployment](./production-deployment.md)
+- [Release checklist](./release-checklist.md)

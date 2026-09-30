@@ -164,7 +164,7 @@ gantt
 
 ### Phase 5: Notifications and polish (1.5 weeks) — **implemented**
 
-**Note:** Pick-warning emails deferred; coordinator runbook at [docs/coordinator-runbook.md](../../coordinator-runbook.md).
+**Note:** Pick-warning emails deferred; coordinator runbook at [coordinator-runbook.md](../../coordinator-runbook.md).
 
 **Objective:** Production-ready comms and hardening.
 

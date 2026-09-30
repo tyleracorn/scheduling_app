@@ -1,10 +1,9 @@
+> **Historical:** Superseded by [docs/release-checklist.md](../../release-checklist.md). Kept for design history only.
+
 # Phase 9 — Release gate and first season
 
-> **Plan sync:** Before starting or changing scope, read the master completion plan in Cursor (`complete_mvp_development_cycle`) and check for updates. If this file and the plan disagree, follow the plan.
-
-**Status:** Not started  
-**Depends on:** Phases 6–8 complete  
-**Estimated effort:** ~1–2 weeks (includes real-world dry-run)
+**Status:** Superseded — use the living [release-checklist.md](../../release-checklist.md)  
+**Depends on:** Phases 6–8 complete
 
 ## Objective
 
@@ -12,7 +11,7 @@ Deploy to production, validate with coordinators, then run the first real schedu
 
 ## MVP release gate checklist
 
-From [08-roadmap-and-mvp.md](./08-roadmap-and-mvp.md) §1.5:
+From [08-roadmap-and-mvp.md](./08-roadmap-and-mvp.md) §1.5 — living copy: [release-checklist.md](../../release-checklist.md).
 
 - [ ] **Production dry-run** — Full period on NAS with real household accounts; use Periods → Reset between trials
 - [ ] **Email deliverability** — SMTP configured; SPF/DKIM on sending domain verified
@@ -31,11 +30,10 @@ From [08-roadmap-and-mvp.md](./08-roadmap-and-mvp.md) §1.5:
 
 ## Exit criteria (definition of done)
 
-- [ ] All Phase 6–8 exit criteria met
 - [ ] Release gate checklist fully checked
 - [ ] One successful dry-run with coordinators
 - [ ] Group ready for first real scheduling season
 
 ## After release
 
-Track feedback from the first season. Prioritize nice-to-have items (iCal, occupancy overlap, email prefs) only if the group asks for them.
+Track feedback from the first season. See [backlog.md](../../backlog.md).

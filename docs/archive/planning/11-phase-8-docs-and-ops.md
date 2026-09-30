@@ -17,7 +17,7 @@ Bring written docs in line with the current app and prepare operators for NAS de
 | `README.md` | Calendar-first UX, worker bee, swap/revise pick; migrate from repo root |
 | `docs/coordinator-runbook.md` | Period activity sidebar, swap weeks, worker bee, revise pick |
 | `docs/production-deployment.md` | **New:** NAS reverse proxy, env vars, health checks, backup/restore |
-| `docs/planning/08-roadmap-and-mvp.md` | Mark release gate items as completed when done |
+| Historical roadmap (archived) | Mark release gate items as completed when done |
 | `.cursor/rules/project-context.mdc` | Fix quality-check commands; period/week vocabulary |
 
 ## Production deployment guide (outline)

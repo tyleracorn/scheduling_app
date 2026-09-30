@@ -2,13 +2,11 @@
 
 Lightweight shared-cabin scheduling for multiple households. Self-hosted via Docker (NAS-friendly).
 
-## Planning
+## Documentation
 
-See [docs/planning/README.md](./docs/planning/README.md).
+See **[docs/README.md](./docs/README.md)** for the docs hub (domain rules, coordinator runbook, deployment, release checklist, backlog).
 
-**Domain rules** (what must not break — roles, draft, Worker Bee, dual UI): [docs/domain-rules.md](./docs/domain-rules.md).
-
-Phases 0–5 are implemented. Remaining completion work: [09-phase-6](./docs/planning/09-phase-6-mvp-story-gaps.md) through [12-phase-9](./docs/planning/12-phase-9-release-gate.md).
+In-app Help: `/help` after signing in.
 
 ## Quick start (development)
 
@@ -87,21 +85,10 @@ docker/       Entrypoint (migrate, seed, start)
 | `pnpm db:seed` | Bootstrap: admin, households, settings |
 | `pnpm db:seed:demo` | Bootstrap + demo calendar (or set `SEED_DEMO=true`) |
 
-## Phase status
+## Status
 
-- [x] **Phase 0:** Auth, admin, health, Docker scaffold
-- [x] **Phase 1:** Calendar read, month grid, week detail drawer
-- [x] **Phase 2:** Household notes and green/red occupancy
-- [x] **Phase 3:** Period CRUD, round-based draft, period plan bulk generate
-- [x] **Phase 4:** Manual assignment, publish, post-publish reassign with audit
-- [x] **Phase 5:** Notification inbox, email, rate limits, coordinator runbook
-- [x] **Phase 6:** MVP story gaps — [plan](./docs/planning/09-phase-6-mvp-story-gaps.md)
-- [x] **Phase 7:** Hardening and QA — [plan](./docs/planning/10-phase-7-hardening-and-qa.md)
-- [x] **Phase 8:** Docs and ops — [plan](./docs/planning/11-phase-8-docs-and-ops.md)
-- [ ] **Phase 9:** Release gate (NAS deploy, dry-run) — [plan](./docs/planning/12-phase-9-release-gate.md)
+Phases 0–8 are complete. Remaining: [release checklist](./docs/release-checklist.md) (production dry-run / first season).
 
-Domain rules: [docs/domain-rules.md](./docs/domain-rules.md)
-
-Coordinator runbook: [docs/coordinator-runbook.md](./docs/coordinator-runbook.md)
+Historical planning docs: [docs/archive/planning/](./docs/archive/planning/).
 
 Re-seed demo calendar data: `pnpm db:seed:demo`

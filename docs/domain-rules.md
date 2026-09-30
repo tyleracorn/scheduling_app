@@ -1,6 +1,6 @@
 # Domain rules — what must not break
 
-Single source of truth for cabin scheduling invariants. Prefer this over scattered planning docs when adding features or tests. Planning detail remains in [docs/planning/](./planning/README.md); coordinator how-to is in [coordinator-runbook.md](./coordinator-runbook.md).
+Single source of truth for cabin scheduling invariants. Prefer this over archived planning docs when adding features or tests. See the [docs hub](./README.md); coordinator how-to is in [coordinator-runbook.md](./coordinator-runbook.md).
 
 ## Roles live on households, not users
 

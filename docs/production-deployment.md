@@ -2,7 +2,7 @@
 
 Self-host the cabin scheduling app on a NAS or home server using Docker.
 
-> **Plan sync:** See [12-phase-9-release-gate.md](./planning/12-phase-9-release-gate.md) for the release checklist.
+> Release gate and dry-run: [release-checklist.md](./release-checklist.md).
 
 ## Prerequisites
 
