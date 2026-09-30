@@ -13,6 +13,7 @@ export async function householdsRoutes(app: FastifyInstance) {
       households: households.map((h) => ({
         id: h.id,
         name: h.name,
+        short_code: h.shortCode,
         color: h.color,
         active: h.active,
         is_worker_bee: h.isWorkerBee,

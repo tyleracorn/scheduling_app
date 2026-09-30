@@ -9,6 +9,10 @@ import {
   isSystemAdmin,
 } from "../lib/authority.js";
 import { requireAuth, requireCoordinatorHouseholdTier } from "../plugins/auth.js";
+import {
+  formatHousehold,
+  normalizeShortCode,
+} from "../services/households.js";
 
 const profileSchema = z.object({
   display_name: z.string().min(1).max(100),
@@ -23,6 +27,15 @@ const schedulingToolsSchema = z.object({
   enabled: z.boolean(),
 });
 
+const householdPatchSchema = z
+  .object({
+    name: z.string().min(1).max(100).optional(),
+    short_code: z.string().min(1).max(3).optional(),
+  })
+  .refine((d) => d.name !== undefined || d.short_code !== undefined, {
+    message: "Provide name and/or short_code",
+  });
+
 function formatUser(user: {
   id: string;
   email: string;
@@ -33,6 +46,7 @@ function formatUser(user: {
     householdId: string;
     household: {
       name: string;
+      shortCode: string;
       authority: "active" | "coordinator" | "admin";
       isWorkerBee: boolean;
     };
@@ -57,6 +71,7 @@ function formatUser(user: {
     canToggleSchedulingTools: hasCoordinatorHouseholdTier(ctx),
     householdId: user.membership?.householdId ?? null,
     householdName: household?.name ?? null,
+    householdShortCode: household?.shortCode ?? null,
   };
 }
 
@@ -73,6 +88,45 @@ export async function meRoutes(app: FastifyInstance) {
       include: { membership: { include: { household: true } } },
     });
     return { user: formatUser(user) };
+  });
+
+  app.patch("/api/v1/me/household", async (request) => {
+    const authUser = requireAuth(request);
+    if (!authUser.householdId) {
+      throw new AppError(422, "no_household", "You are not assigned to a household");
+    }
+    const parsed = householdPatchSchema.safeParse(request.body);
+    if (!parsed.success) {
+      throw new AppError(400, "validation_error", "Invalid household", parsed.error.flatten());
+    }
+
+    const data: { name?: string; shortCode?: string } = {};
+    if (parsed.data.name !== undefined) {
+      data.name = parsed.data.name.trim();
+    }
+    if (parsed.data.short_code !== undefined) {
+      const shortCode = normalizeShortCode(parsed.data.short_code);
+      const clash = await prisma.household.findFirst({
+        where: { shortCode, id: { not: authUser.householdId } },
+      });
+      if (clash) {
+        throw new AppError(409, "short_code_taken", `Short code ${shortCode} is already in use`);
+      }
+      data.shortCode = shortCode;
+    }
+
+    const household = await prisma.household.update({
+      where: { id: authUser.householdId },
+      data,
+    });
+    const user = await prisma.user.findUniqueOrThrow({
+      where: { id: authUser.id },
+      include: { membership: { include: { household: true } } },
+    });
+    return {
+      household: formatHousehold(household),
+      user: formatUser(user),
+    };
   });
 
   app.patch("/api/v1/me/scheduling-tools", async (request) => {

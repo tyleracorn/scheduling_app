@@ -20,6 +20,7 @@ import {
   startDraft,
 } from "../services/draft.js";
 import { assignWeek, getPeriodSwapHistory, publishPeriod, swapWeeks } from "../services/assignments.js";
+import { allocateUniqueShortCode } from "../lib/short-code.js";
 
 const prisma = new PrismaClient();
 const RUN = !!process.env.DATABASE_URL;
@@ -33,6 +34,14 @@ type Fixture = {
   periodId: string;
   weekIds: string[];
 };
+
+async function nextTestShortCode(preferred: string): Promise<string> {
+  const rows = await prisma.household.findMany({ select: { shortCode: true } });
+  return allocateUniqueShortCode(
+    preferred,
+    new Set(rows.map((r) => r.shortCode)),
+  );
+}
 
 /** Migrations create the table; seed/bootstrap normally inserts id=1. CI has no seed. */
 async function ensureSystemSettings() {
@@ -77,6 +86,7 @@ async function createFixture(): Promise<Fixture> {
     const h = await prisma.household.create({
       data: {
         name: `${id}-H${i}`,
+        shortCode: await nextTestShortCode(`H${i}`),
         color: "#2563EB",
         isWorkerBee: false,
         authority: i === 1 ? "coordinator" : "active",
@@ -373,6 +383,7 @@ describe("draft integration", { skip: !RUN }, () => {
     const wb = await prisma.household.create({
       data: {
         name: `${tag}-wb-${Date.now()}-WorkerBee`,
+        shortCode: await nextTestShortCode("WOR"),
         color: "#64748B",
         isWorkerBee: true,
         authority: "active",

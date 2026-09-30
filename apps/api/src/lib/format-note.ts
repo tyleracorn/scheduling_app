@@ -9,7 +9,7 @@ type NoteRow = {
   body: string;
   categoryId: string | null;
   createdByUserId: string;
-  household: { name: string };
+  household: { name: string; shortCode: string };
   category: { id: string; name: string; slug: string; color: string } | null;
   createdBy: { id: string; displayName: string };
 };
@@ -19,6 +19,7 @@ export function formatCalendarNote(note: NoteRow) {
     id: note.id,
     household_id: note.householdId,
     household_name: note.household.name,
+    household_short_code: note.household.shortCode,
     start_date: toDateString(note.startDate),
     end_date: toDateString(note.endDate),
     body: note.body,

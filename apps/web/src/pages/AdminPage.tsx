@@ -4,6 +4,7 @@ import { api, type AdminSettings, type HouseholdAuthority, type NoteCategory } f
 type Household = {
   id: string;
   name: string;
+  short_code: string;
   color: string;
   active: boolean;
   is_worker_bee: boolean;
@@ -549,6 +550,21 @@ export function AdminPage() {
                   }
                 }}
                 className="flex-1 min-w-[8rem] rounded border border-slate-300 px-2 py-1"
+              />
+              <input
+                type="text"
+                defaultValue={h.short_code}
+                maxLength={3}
+                title="Calendar shortcode (1–3 chars)"
+                aria-label={`Shortcode for ${h.name}`}
+                onBlur={(e) => {
+                  const next = e.target.value.trim().toUpperCase().replace(/[^A-Z0-9]/g, "").slice(0, 3);
+                  e.target.value = next || h.short_code;
+                  if (next && next !== h.short_code) {
+                    void patchHousehold(h.id, { short_code: next });
+                  }
+                }}
+                className="w-14 rounded border border-slate-300 px-2 py-1 uppercase tracking-wide text-center"
               />
               {h.is_worker_bee ? (
                 <span className="text-xs font-medium text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">

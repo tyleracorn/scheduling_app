@@ -1,6 +1,7 @@
 export type CalendarAssignment = {
   household_id: string;
   household_name: string;
+  household_short_code: string;
   color: string;
   source: string;
   updated_at: string;
@@ -37,6 +38,7 @@ export type CalendarNote = {
   id: string;
   household_id: string;
   household_name: string;
+  household_short_code: string;
   start_date: string;
   end_date: string;
   body: string;

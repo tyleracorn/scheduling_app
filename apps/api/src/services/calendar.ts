@@ -162,6 +162,7 @@ function formatWeekAssignment(
   return {
     household_id: a.householdId,
     household_name: a.household.name,
+    household_short_code: a.household.shortCode,
     color: a.household.color,
     source: a.source,
     updated_at: a.updatedAt.toISOString(),

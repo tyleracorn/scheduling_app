@@ -7,8 +7,11 @@ import { requireAdmin } from "../plugins/auth.js";
 import { sendEmail, inviteLink, getSmtpStatus } from "../services/email.js";
 import { assertCoordinatorHouseholdLimit } from "../services/coordinators.js";
 import {
+  deriveShortCodeFromName,
   ensureWorkerBeeHousehold,
   formatHousehold,
+  nextUniqueShortCode,
+  normalizeShortCode,
   syncHouseholdSlots,
 } from "../services/households.js";
 import {
@@ -25,6 +28,7 @@ import {
 const householdSchema = z.object({
   name: z.string().min(1).max(100),
   color: z.string().regex(/^#[0-9A-Fa-f]{6}$/),
+  short_code: z.string().min(1).max(3).optional(),
   active: z.boolean().optional(),
   is_worker_bee: z.boolean().optional(),
   authority: z.enum(["active", "coordinator", "admin"]).optional(),
@@ -76,9 +80,22 @@ export async function adminRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       throw new AppError(400, "validation_error", "Invalid household", parsed.error.flatten());
     }
+    const preferred = parsed.data.short_code
+      ? normalizeShortCode(parsed.data.short_code)
+      : deriveShortCodeFromName(parsed.data.name);
+    if (parsed.data.short_code) {
+      const clash = await prisma.household.findFirst({ where: { shortCode: preferred } });
+      if (clash) {
+        throw new AppError(409, "short_code_taken", `Short code ${preferred} is already in use`);
+      }
+    }
+    const shortCode = parsed.data.short_code
+      ? preferred
+      : await nextUniqueShortCode(preferred);
     const household = await prisma.household.create({
       data: {
         name: parsed.data.name,
+        shortCode,
         color: parsed.data.color,
         active: parsed.data.active ?? true,
         isWorkerBee: parsed.data.is_worker_bee ?? false,
@@ -130,10 +147,22 @@ export async function adminRoutes(app: FastifyInstance) {
       await assertCoordinatorHouseholdLimit(id, "coordinator");
     }
 
+    let shortCode: string | undefined;
+    if (data.short_code !== undefined) {
+      shortCode = normalizeShortCode(data.short_code);
+      const clash = await prisma.household.findFirst({
+        where: { shortCode, id: { not: id } },
+      });
+      if (clash) {
+        throw new AppError(409, "short_code_taken", `Short code ${shortCode} is already in use`);
+      }
+    }
+
     const household = await prisma.household.update({
       where: { id },
       data: {
         name: data.name,
+        shortCode,
         color: data.color,
         active: data.active,
         isWorkerBee: data.is_worker_bee,

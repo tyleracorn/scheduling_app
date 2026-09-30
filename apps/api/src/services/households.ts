@@ -1,18 +1,47 @@
 import { AppError } from "../lib/errors.js";
 import { prisma } from "../lib/prisma.js";
+import {
+  allocateUniqueShortCode,
+  deriveShortCodeFromName,
+  normalizeShortCode,
+} from "../lib/short-code.js";
 
 const SLOT_COLORS = ["#2563EB", "#DC2626", "#16A34A", "#CA8A04", "#9333EA", "#0891B2", "#EA580C"];
 const WORKER_BEE_NAME = "Worker Bee";
 const WORKER_BEE_COLOR = "#64748B";
+const WORKER_BEE_SHORT = "WOR";
+
+async function takenShortCodes(excludeId?: string): Promise<Set<string>> {
+  const rows = await prisma.household.findMany({
+    select: { id: true, shortCode: true },
+  });
+  const taken = new Set<string>();
+  for (const row of rows) {
+    if (excludeId && row.id === excludeId) continue;
+    taken.add(row.shortCode);
+  }
+  return taken;
+}
+
+/** Allocate a unique short code for a new or updated household. */
+export async function nextUniqueShortCode(
+  preferred: string,
+  excludeId?: string,
+): Promise<string> {
+  const taken = await takenShortCodes(excludeId);
+  return allocateUniqueShortCode(preferred, taken);
+}
 
 export async function ensureWorkerBeeHousehold() {
   const existing = await prisma.household.findFirst({ where: { isWorkerBee: true } });
   if (existing) return existing;
 
   await prisma.household.updateMany({ data: { isWorkerBee: false }, where: { isWorkerBee: true } });
+  const shortCode = await nextUniqueShortCode(WORKER_BEE_SHORT);
   return prisma.household.create({
     data: {
       name: WORKER_BEE_NAME,
+      shortCode,
       color: WORKER_BEE_COLOR,
       active: true,
       isWorkerBee: true,
@@ -53,9 +82,11 @@ export async function syncHouseholdSlots(slotCount: number) {
   let created = 0;
   while (refreshed.length + created < slotCount) {
     const n = refreshed.length + created + 1;
+    const shortCode = await nextUniqueShortCode(`H${n}`);
     await prisma.household.create({
       data: {
         name: `Household ${n}`,
+        shortCode,
         color: SLOT_COLORS[(n - 1) % SLOT_COLORS.length]!,
         active: true,
         isWorkerBee: false,
@@ -70,6 +101,7 @@ export async function syncHouseholdSlots(slotCount: number) {
 export function formatHousehold(h: {
   id: string;
   name: string;
+  shortCode: string;
   color: string;
   active: boolean;
   isWorkerBee: boolean;
@@ -78,6 +110,7 @@ export function formatHousehold(h: {
   return {
     id: h.id,
     name: h.name,
+    short_code: h.shortCode,
     color: h.color,
     active: h.active,
     is_worker_bee: h.isWorkerBee,
@@ -85,3 +118,5 @@ export function formatHousehold(h: {
     is_coordinator: h.isWorkerBee ? false : h.authority === "coordinator",
   };
 }
+
+export { deriveShortCodeFromName, normalizeShortCode };

@@ -5,11 +5,11 @@ import { computePeriodWeeks } from "../dist/lib/period-weeks.js";
 const prisma = new PrismaClient();
 
 const HOUSEHOLDS = [
-  { name: "Household 1", color: "#2563EB" },
-  { name: "Household 2", color: "#DC2626" },
-  { name: "Household 3", color: "#16A34A" },
-  { name: "Household 4", color: "#CA8A04" },
-  { name: "Household 5", color: "#9333EA" },
+  { name: "Household 1", shortCode: "H1", color: "#2563EB" },
+  { name: "Household 2", shortCode: "H2", color: "#DC2626" },
+  { name: "Household 3", shortCode: "H3", color: "#16A34A" },
+  { name: "Household 4", shortCode: "H4", color: "#CA8A04" },
+  { name: "Household 5", shortCode: "H5", color: "#9333EA" },
 ];
 
 function envFlag(name: string): boolean {
@@ -51,6 +51,7 @@ async function seedBootstrap() {
     await prisma.household.create({
       data: {
         name: "Worker Bee",
+        shortCode: "WOR",
         color: "#64748B",
         active: true,
         isWorkerBee: true,

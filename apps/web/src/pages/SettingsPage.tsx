@@ -40,12 +40,19 @@ export function SettingsPage() {
   const [busy, setBusy] = useState(false);
 
   const [displayName, setDisplayName] = useState(user?.displayName ?? "");
+  const [householdName, setHouseholdName] = useState(user?.householdName ?? "");
+  const [householdShortCode, setHouseholdShortCode] = useState(user?.householdShortCode ?? "");
   const [currentPassword, setCurrentPassword] = useState("");
   const [newPassword, setNewPassword] = useState("");
 
   useEffect(() => {
     if (user?.displayName) setDisplayName(user.displayName);
   }, [user?.displayName]);
+
+  useEffect(() => {
+    setHouseholdName(user?.householdName ?? "");
+    setHouseholdShortCode(user?.householdShortCode ?? "");
+  }, [user?.householdName, user?.householdShortCode]);
 
   function selectOccupancy(next: OccupancyDefaultMode) {
     setMode(next);
@@ -71,6 +78,26 @@ export function SettingsPage() {
       await api.updateProfile(displayName.trim());
       await refresh();
       setMessage("Profile updated.");
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Save failed");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function saveHousehold(e: FormEvent) {
+    e.preventDefault();
+    const name = householdName.trim();
+    const short_code = householdShortCode.trim().toUpperCase();
+    if (!name || !short_code) return;
+    setBusy(true);
+    setError(null);
+    setMessage(null);
+    try {
+      await api.updateMyHousehold({ name, short_code });
+      setHouseholdShortCode(short_code);
+      await refresh();
+      setMessage("Household updated.");
     } catch (err) {
       setError(err instanceof Error ? err.message : "Save failed");
     } finally {
@@ -138,17 +165,20 @@ export function SettingsPage() {
         <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
           <h2 className="text-sm font-medium text-slate-800 mb-1">Your account</h2>
           <p className="text-xs text-slate-500 mb-4">
-            Email and household are managed by an administrator.
+            Email is managed by an administrator. Household name and shortcode can be edited below
+            when you belong to a household.
           </p>
           <dl className="text-sm space-y-2 mb-4">
             <div>
               <dt className="text-xs text-slate-500">Email</dt>
               <dd className="text-slate-800">{user.email}</dd>
             </div>
-            <div>
-              <dt className="text-xs text-slate-500">Household</dt>
-              <dd className="text-slate-800">{user.householdName ?? "None assigned"}</dd>
-            </div>
+            {!user.householdId && (
+              <div>
+                <dt className="text-xs text-slate-500">Household</dt>
+                <dd className="text-slate-800">None assigned</dd>
+              </div>
+            )}
             <div>
               <dt className="text-xs text-slate-500">Role</dt>
               <dd className="flex flex-wrap gap-1.5 mt-0.5">
@@ -233,6 +263,61 @@ export function SettingsPage() {
               className="rounded border border-slate-400 px-3 py-1.5 text-sm hover:bg-slate-50 disabled:opacity-50"
             >
               Update password
+            </button>
+          </form>
+        </section>
+      )}
+
+      {user?.householdId && (
+        <section className="rounded-lg border border-slate-200 bg-white p-5 shadow-sm">
+          <h2 className="text-sm font-medium text-slate-800 mb-1">Your household</h2>
+          <p className="text-xs text-slate-500 mb-4">
+            Any member of this household can change the name and calendar shortcode. Changes show on
+            the calendar for everyone.
+          </p>
+          <form onSubmit={(e) => void saveHousehold(e)} className="space-y-3">
+            <label className="block text-sm">
+              Household name
+              <input
+                type="text"
+                required
+                maxLength={100}
+                value={householdName}
+                onChange={(e) => setHouseholdName(e.target.value)}
+                className="mt-1 w-full rounded border border-slate-300 px-2 py-1.5"
+              />
+            </label>
+            <label className="block text-sm">
+              Shortcode
+              <input
+                type="text"
+                required
+                maxLength={3}
+                pattern="[A-Za-z0-9]{1,3}"
+                title="1–3 letters or numbers"
+                value={householdShortCode}
+                onChange={(e) =>
+                  setHouseholdShortCode(e.target.value.replace(/[^A-Za-z0-9]/g, "").slice(0, 3))
+                }
+                onBlur={() => setHouseholdShortCode((v) => v.toUpperCase())}
+                className="mt-1 w-24 rounded border border-slate-300 px-2 py-1.5 uppercase tracking-wide"
+              />
+              <span className="block text-xs text-slate-500 mt-1">
+                Shown on calendar badges (1–3 characters, unique across households).
+              </span>
+            </label>
+            <button
+              type="submit"
+              disabled={
+                busy ||
+                !householdName.trim() ||
+                !householdShortCode.trim() ||
+                (householdName.trim() === (user.householdName ?? "") &&
+                  householdShortCode.trim().toUpperCase() === (user.householdShortCode ?? ""))
+              }
+              className="rounded bg-slate-800 px-3 py-1.5 text-sm text-white hover:bg-slate-900 disabled:opacity-50"
+            >
+              Save household
             </button>
           </form>
         </section>

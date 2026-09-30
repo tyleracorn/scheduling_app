@@ -22,6 +22,7 @@ export type AuthUser = {
   canToggleSchedulingTools: boolean;
   householdId: string | null;
   householdName: string | null;
+  householdShortCode: string | null;
 };
 
 declare module "fastify" {
@@ -55,6 +56,7 @@ async function loadUser(userId: string): Promise<AuthUser | null> {
     canToggleSchedulingTools: hasCoordinatorHouseholdTier(ctx),
     householdId: user.membership?.householdId ?? null,
     householdName: household?.name ?? null,
+    householdShortCode: household?.shortCode ?? null,
   };
 }
 

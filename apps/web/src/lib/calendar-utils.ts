@@ -98,11 +98,14 @@ export function householdInitial(name: string): string {
   return trimmed.charAt(0).toUpperCase();
 }
 
-/** Compact calendar badge, e.g. "Household 1" → "h1". */
-export function householdShortLabel(name: string): string {
+/** Compact calendar badge from stored shortcode, or name-derived fallback. */
+export function householdShortLabel(name: string, shortCode?: string | null): string {
+  if (shortCode && shortCode.trim()) {
+    return shortCode.trim().toUpperCase();
+  }
   const match = name.match(/household\s*(\d+)/i);
-  if (match) return `h${match[1]}`;
-  return householdInitial(name).toLowerCase();
+  if (match) return `H${match[1]}`;
+  return householdInitial(name);
 }
 
 export function textColorForBackground(hex: string): string {

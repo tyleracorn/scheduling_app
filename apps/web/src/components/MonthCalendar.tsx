@@ -24,11 +24,15 @@ type Props = {
   onSelectDay: (date: Date, week: CalendarWeek | null) => void;
 };
 
-function assignmentLabel(name: string, compact: boolean): string {
-  if (!compact) return name;
-  const words = name.trim().split(/\s+/);
-  if (words.length === 1) return name.length > 6 ? `${name.slice(0, 5)}…` : name;
-  return words.map((w) => w.charAt(0).toUpperCase()).join("");
+function assignmentLabel(
+  name: string,
+  compact: boolean,
+  shortCode?: string | null,
+): string {
+  if (compact) {
+    return householdShortLabel(name, shortCode);
+  }
+  return name;
 }
 
 export function MonthCalendar({ year, month, weeks, notes, occupancy, onSelectDay }: Props) {
@@ -120,7 +124,7 @@ export function MonthCalendar({ year, month, weeks, notes, occupancy, onSelectDa
                           )
                           .join("\n")}
                       >
-                        {householdShortLabel(n.household_name)}
+                        {householdShortLabel(n.household_name, n.household_short_code)}
                       </span>
                     ))}
                   </span>
@@ -134,7 +138,11 @@ export function MonthCalendar({ year, month, weeks, notes, occupancy, onSelectDa
                       style={{ backgroundColor: assignment.color }}
                       title={assignment.household_name}
                     >
-                      {assignmentLabel(assignment.household_name, compactAssignment)}
+                      {assignmentLabel(
+                        assignment.household_name,
+                        compactAssignment,
+                        assignment.household_short_code,
+                      )}
                     </div>
                   ))}
 

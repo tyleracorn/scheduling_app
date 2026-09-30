@@ -75,6 +75,7 @@ export type AuthUser = {
   canToggleSchedulingTools: boolean;
   householdId: string | null;
   householdName: string | null;
+  householdShortCode: string | null;
 };
 
 type ApiError = { error?: { code: string; message: string; details?: unknown }; message?: string };
@@ -107,6 +108,22 @@ export const api = {
     request<{ user: AuthUser }>("/api/v1/me", {
       method: "PATCH",
       body: JSON.stringify({ display_name }),
+    }),
+  updateMyHousehold: (data: { name?: string; short_code?: string }) =>
+    request<{
+      household: {
+        id: string;
+        name: string;
+        short_code: string;
+        color: string;
+        active: boolean;
+        is_worker_bee: boolean;
+        authority: HouseholdAuthority;
+      };
+      user: AuthUser;
+    }>("/api/v1/me/household", {
+      method: "PATCH",
+      body: JSON.stringify(data),
     }),
   updateSchedulingTools: (enabled: boolean) =>
     request<{ user: AuthUser }>("/api/v1/me/scheduling-tools", {
@@ -148,6 +165,7 @@ export const api = {
       households: {
         id: string;
         name: string;
+        short_code: string;
         color: string;
         active: boolean;
         is_worker_bee: boolean;
@@ -160,6 +178,7 @@ export const api = {
       households: {
         id: string;
         name: string;
+        short_code: string;
         color: string;
         active: boolean;
         is_worker_bee: boolean;
@@ -170,6 +189,7 @@ export const api = {
       households: {
         id: string;
         name: string;
+        short_code: string;
         color: string;
         active: boolean;
         is_worker_bee: boolean;
@@ -190,6 +210,7 @@ export const api = {
     id: string,
     data: Partial<{
       name: string;
+      short_code: string;
       color: string;
       active: boolean;
       is_worker_bee: boolean;
@@ -201,6 +222,7 @@ export const api = {
       household: {
         id: string;
         name: string;
+        short_code: string;
         color: string;
         active: boolean;
         is_worker_bee: boolean;
