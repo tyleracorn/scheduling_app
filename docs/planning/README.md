@@ -2,6 +2,8 @@
 
 Product and technical planning for a lightweight shared-cabin scheduling application.
 
+**Living invariants** (keep tests honest as features change): [../domain-rules.md](../domain-rules.md).
+
 ## Reading order
 
 1. [01-pick-model-decision.md](./01-pick-model-decision.md) — Draft round model (resolved open question)

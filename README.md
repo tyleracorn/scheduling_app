@@ -6,6 +6,8 @@ Lightweight shared-cabin scheduling for multiple households. Self-hosted via Doc
 
 See [docs/planning/README.md](./docs/planning/README.md).
 
+**Domain rules** (what must not break — roles, draft, Worker Bee, dual UI): [docs/domain-rules.md](./docs/domain-rules.md).
+
 Phases 0–5 are implemented. Remaining completion work: [09-phase-6](./docs/planning/09-phase-6-mvp-story-gaps.md) through [12-phase-9](./docs/planning/12-phase-9-release-gate.md).
 
 ## Quick start (development)
@@ -97,6 +99,8 @@ docker/       Entrypoint (migrate, seed, start)
 - [x] **Phase 7:** Hardening and QA — [plan](./docs/planning/10-phase-7-hardening-and-qa.md)
 - [x] **Phase 8:** Docs and ops — [plan](./docs/planning/11-phase-8-docs-and-ops.md)
 - [ ] **Phase 9:** Release gate (NAS deploy, dry-run) — [plan](./docs/planning/12-phase-9-release-gate.md)
+
+Domain rules: [docs/domain-rules.md](./docs/domain-rules.md)
 
 Coordinator runbook: [docs/coordinator-runbook.md](./docs/coordinator-runbook.md)
 

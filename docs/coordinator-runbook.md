@@ -59,6 +59,10 @@ Quick reference for scheduling coordinators.
 - Clears all assignments and draft turns; status returns to **Open** so you can start draft again.
 - Use for dry-runs and testing — not for routine production changes.
 
+## Manual UI smoke checklist
+
+Full checklist (drawer vs Period activity, member vs coordinator, mobile): [domain-rules.md](./domain-rules.md#manual-ui-smoke-checklist).
+
 ## Tips
 
 - Navigate to the period month via Periods → Open on calendar.
