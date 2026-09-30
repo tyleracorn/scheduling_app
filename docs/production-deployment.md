@@ -72,6 +72,13 @@ git push origin v1.1.2
 
 You can also run **Actions → Publish image → Run workflow** and enter a tag (manual dispatch). Uses `GITHUB_TOKEN` — no Personal Access Token required for same-repo packages.
 
+**If the workflow fails with `permission_denied: write_package`:** the package was likely first created by a local `docker push` (PAT). Grant Actions write access once:
+
+1. Open [github.com/tyleracorn/scheduling_app/pkgs/container/scheduling_app](https://github.com/tyleracorn/scheduling_app/pkgs/container/scheduling_app) (or **Packages** on your profile → `scheduling_app`).
+2. **Package settings** (right sidebar).
+3. Under **Manage Actions access** → **Add repository** → select `tyleracorn/scheduling_app` → role **Write**.
+4. Re-run the failed workflow (or **Actions → Publish image → Run workflow** with tag `v1.1.2`).
+
 Then set `APP_IMAGE_TAG` on the NAS and pull (below).
 
 #### Build and push to GHCR (from your PC)
