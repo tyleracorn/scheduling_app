@@ -575,6 +575,10 @@ export const api = {
     request<{ ok: boolean }>(`/api/v1/notifications/${id}/read`, { method: "POST", body: JSON.stringify({}) }),
   markAllNotificationsRead: () =>
     request<{ ok: boolean }>("/api/v1/notifications/read-all", { method: "POST", body: JSON.stringify({}) }),
+  deleteNotification: (id: string) =>
+    request<{ ok: boolean }>(`/api/v1/notifications/${id}`, { method: "DELETE" }),
+  deleteAllNotifications: () =>
+    request<{ ok: boolean }>("/api/v1/notifications", { method: "DELETE" }),
   coordinatorPick: (
     periodId: string,
     turnId: string,

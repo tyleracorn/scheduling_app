@@ -13,6 +13,7 @@ import { SettingsPage } from "./pages/SettingsPage";
 import { PeriodsPage } from "./pages/PeriodsPage";
 import { NotesPage } from "./pages/NotesPage";
 import { HelpPage } from "./pages/HelpPage";
+import { NotificationsPage } from "./pages/NotificationsPage";
 
 function RequireAuth({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
@@ -60,6 +61,7 @@ function AppRoutes() {
           }
         />
         <Route path="notes" element={<NotesPage />} />
+        <Route path="notifications" element={<NotificationsPage />} />
         <Route path="help" element={<HelpPage />} />
         <Route path="settings" element={<SettingsPage />} />
         <Route path="periods" element={<PeriodsPage />} />

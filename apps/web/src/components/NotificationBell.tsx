@@ -1,6 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from "react";
+import { Link } from "react-router-dom";
 import { api } from "../lib/api";
 import type { NotificationItem } from "../lib/api";
+import { NotificationRow } from "./NotificationRow";
+
+const DROPDOWN_LIMIT = 4;
 
 export function NotificationBell() {
   const [open, setOpen] = useState(false);
@@ -62,6 +66,14 @@ export function NotificationBell() {
     setCount(0);
   }
 
+  async function deleteOne(id: string) {
+    await api.deleteNotification(id);
+    setItems((prev) => prev.filter((n) => n.id !== id));
+    void loadCount();
+  }
+
+  const visible = items.slice(0, DROPDOWN_LIMIT);
+
   return (
     <div className="relative" ref={panelRef}>
       <button
@@ -79,7 +91,7 @@ export function NotificationBell() {
       </button>
 
       {open && (
-        <div className="absolute right-0 top-full mt-2 w-80 max-h-96 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg z-50">
+        <div className="absolute right-0 top-full mt-2 w-80 max-h-80 overflow-y-auto rounded-lg border border-slate-200 bg-white shadow-lg z-50">
           <div className="flex items-center justify-between px-3 py-2 border-b border-slate-100">
             <span className="text-sm font-medium text-slate-800">Inbox</span>
             {count > 0 && (
@@ -94,30 +106,30 @@ export function NotificationBell() {
           </div>
           {loading ? (
             <p className="p-3 text-sm text-slate-500">Loading…</p>
-          ) : items.length === 0 ? (
+          ) : visible.length === 0 ? (
             <p className="p-3 text-sm text-slate-500">No notifications.</p>
           ) : (
             <ul>
-              {items.map((n) => (
-                <li
+              {visible.map((n) => (
+                <NotificationRow
                   key={n.id}
-                  className={`px-3 py-2 border-b border-slate-50 text-sm ${n.read_at ? "opacity-70" : "bg-indigo-50/40"}`}
-                >
-                  <p className="font-medium text-slate-800">{n.title}</p>
-                  <p className="text-slate-600 text-xs mt-0.5">{n.body}</p>
-                  {!n.read_at && (
-                    <button
-                      type="button"
-                      onClick={() => void markRead(n.id)}
-                      className="text-xs text-indigo-600 mt-1 hover:underline"
-                    >
-                      Mark read
-                    </button>
-                  )}
-                </li>
+                  notification={n}
+                  compact
+                  onMarkRead={(id) => void markRead(id)}
+                  onDelete={(id) => void deleteOne(id)}
+                />
               ))}
             </ul>
           )}
+          <div className="px-3 py-2 border-t border-slate-100">
+            <Link
+              to="/notifications"
+              onClick={() => setOpen(false)}
+              className="text-xs font-medium text-indigo-600 hover:underline"
+            >
+              View all notifications
+            </Link>
+          </div>
         </div>
       )}
     </div>

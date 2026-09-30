@@ -69,6 +69,24 @@ async function notificationsRoutes(app: FastifyInstance) {
     });
     return { ok: true };
   });
+
+  app.delete("/api/v1/notifications/:id", async (request) => {
+    const user = requireAuth(request);
+    const { id } = request.params as { id: string };
+    const result = await prisma.notification.deleteMany({
+      where: { id, userId: user.id },
+    });
+    if (result.count === 0) throw new AppError(404, "not_found", "Notification not found");
+    return { ok: true };
+  });
+
+  app.delete("/api/v1/notifications", async (request) => {
+    const user = requireAuth(request);
+    await prisma.notification.deleteMany({
+      where: { userId: user.id },
+    });
+    return { ok: true };
+  });
 }
 
 export default fp(notificationsRoutes, { name: "notifications-routes" });
