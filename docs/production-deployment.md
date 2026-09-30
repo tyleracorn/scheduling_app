@@ -57,7 +57,26 @@ Build and push from your PC, then pull on the NAS. Example files:
 - [`docker-compose.nas.yml`](../docker-compose.nas.yml) — `app` pulls `ghcr.io/tyleracorn/scheduling_app`, no `build`
 - [`.env.nas.example`](../.env.nas.example) — production `.env` template
 
+#### Automated publish (GitHub Actions)
+
+On every **git tag** matching `v*` (for example `v1.1.2`), [`.github/workflows/publish-image.yml`](../.github/workflows/publish-image.yml) builds the image and pushes to GHCR:
+
+- `ghcr.io/tyleracorn/scheduling_app:<tag>`
+- `ghcr.io/tyleracorn/scheduling_app:latest`
+
+```bash
+# After bumping package.json version and committing:
+git tag v1.1.2
+git push origin v1.1.2
+```
+
+You can also run **Actions → Publish image → Run workflow** and enter a tag (manual dispatch). Uses `GITHUB_TOKEN` — no Personal Access Token required for same-repo packages.
+
+Then set `APP_IMAGE_TAG` on the NAS and pull (below).
+
 #### Build and push to GHCR (from your PC)
+
+Use this when you need a one-off image without tagging. For normal releases, prefer the Actions flow above.
 
 Run these from the **repo root** (where the `Dockerfile` lives).
 
