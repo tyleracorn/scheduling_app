@@ -52,6 +52,11 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       SMTP_FROM: ${SMTP_FROM:-noreply@example.com}
+      # CSV auto-exports write under /data/exports/csv (see EXPORTS_HOST_PATH mount).
+      EXPORT_PATH: ${EXPORT_PATH:-/data/exports/csv}
+    volumes:
+      # Parent backups dir: csv/ (app) + db/ (host pg_dump script).
+      - ${EXPORTS_HOST_PATH:-./data/exports}:/data/exports
     depends_on:
       db:
         condition: service_healthy

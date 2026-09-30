@@ -155,19 +155,57 @@ export async function buildPeriodExportCsv(periodId: string): Promise<string> {
   return lines.join("\n");
 }
 
+const CSV_RETENTION_DAYS = 56;
+
+function safePeriodFileName(name: string, fallbackId: string): string {
+  return name.replace(/[^\w.-]+/g, "_").slice(0, 60) || fallbackId;
+}
+
+/** Dated trail files: weekly_*, published_*, swap_* (not latest_*). */
+function isDatedExportFilename(name: string): boolean {
+  return /^(weekly|published|swap)_.*\.csv$/i.test(name) && !name.toLowerCase().startsWith("latest_");
+}
+
+export async function pruneOldDatedExports(dir: string, now = new Date()): Promise<number> {
+  let removed = 0;
+  let entries;
+  try {
+    entries = await fs.readdir(dir, { withFileTypes: true });
+  } catch {
+    return 0;
+  }
+  const cutoffMs = now.getTime() - CSV_RETENTION_DAYS * 24 * 60 * 60 * 1000;
+  for (const entry of entries) {
+    if (!entry.isFile() || !isDatedExportFilename(entry.name)) continue;
+    const filePath = path.join(dir, entry.name);
+    try {
+      const stat = await fs.stat(filePath);
+      if (stat.mtimeMs < cutoffMs) {
+        await fs.unlink(filePath);
+        removed += 1;
+      }
+    } catch {
+      // Ignore races / permission errors on individual files.
+    }
+  }
+  return removed;
+}
+
 export async function writePeriodExportToPath(periodId: string, label: string): Promise<string | null> {
   if (!config.exportPath) return null;
   const csv = await buildPeriodExportCsv(periodId);
   if (!csv) return null;
 
   const period = await prisma.schedulingPeriod.findUnique({ where: { id: periodId } });
-  const safeName = (period?.name ?? periodId).replace(/[^\w.-]+/g, "_").slice(0, 60);
+  const safeName = safePeriodFileName(period?.name ?? periodId, periodId);
   const stamp = new Date().toISOString().slice(0, 10);
   const filename = `${label}_${safeName}_${stamp}.csv`;
   const dir = config.exportPath;
   await fs.mkdir(dir, { recursive: true });
   const filePath = path.join(dir, filename);
   await fs.writeFile(filePath, csv, "utf8");
+  // Stable name for disaster fallback (open this file first).
+  await fs.writeFile(path.join(dir, `latest_${safeName}.csv`), csv, "utf8");
   return filePath;
 }
 
@@ -189,4 +227,5 @@ export async function runWeeklyExportsIfDue() {
   for (const p of periods) {
     await writePeriodExportToPath(p.id, "weekly");
   }
+  await pruneOldDatedExports(config.exportPath, now);
 }

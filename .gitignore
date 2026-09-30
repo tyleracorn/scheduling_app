@@ -12,3 +12,4 @@ coverage/
 apps/api/prisma/*.db
 .test-cookies*.txt
 .test-login.json
+data/exports/

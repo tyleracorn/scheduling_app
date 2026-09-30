@@ -228,42 +228,110 @@ Migrations run automatically on every container start via `docker/entrypoint.sh`
 
 Local development: `pnpm db:seed` (bootstrap) or `pnpm db:seed:demo` (bootstrap + demo data).
 
-## Database backup
+## Schedule backups (CSV + Postgres)
 
-Postgres data lives in the `postgres_data` Docker volume.
+Two artifacts, different jobs:
 
-```bash
-# Backup
-docker compose exec db pg_dump -U cabin cabin_scheduling > backup-$(date +%Y%m%d).sql
+| Artifact | Job | When TrueNAS is dead |
+|----------|-----|----------------------|
+| `latest_<PeriodName>.csv` | Human-readable schedule | Open in Sheets/Excel and run the cabin by hand |
+| `cabin_latest.sql` | Full DB dump | Restore into a rebuilt Postgres to bring the app back |
 
-# Restore (stop app first)
-docker compose stop app
-docker compose exec -T db psql -U cabin cabin_scheduling < backup-YYYYMMDD.sql
-docker compose start app
-```
+CSV alone cannot rebuild the database (there is no import). Keep a copy of `.env` (secrets) in a password manager or a private Drive note — dumps without env values make redeploy painful.
 
-Schedule backups with cron on the host (daily recommended).
+### 1. On-NAS folder layout
 
-## CSV schedule exports
+Create a dataset (example): `tank/apps/cabin-scheduling/backups`.
 
-The API writes period CSV files to `EXPORT_PATH` when configured:
-
-- **Weekly** — scheduler job (Sunday midnight cabin timezone)
-- **On publish** — each time a period is published
-
-Set in `.env`:
+In `.env` (see `.env.nas.example`):
 
 ```bash
-EXPORT_PATH=/data/exports
+EXPORTS_HOST_PATH=/mnt/tank/apps/cabin-scheduling/backups
+EXPORT_PATH=/data/exports/csv
 ```
 
-Mount your NAS shared folder into the app container at that path (see `docker-compose.nas.yml`). Any signed-in member can also download a period CSV from **Periods → Download CSV**.
+Compose mounts `EXPORTS_HOST_PATH` → `/data/exports` on the app container. Layout on disk:
 
-Example host cron to copy exports to a second location (optional):
+```text
+backups/
+  csv/          # app auto-exports (EXPORT_PATH)
+  db/           # scripts/backup-db.sh dumps
+```
+
+Redeploy after changing env:
 
 ```bash
-0 3 * * 0 rsync -a /volume1/docker/cabin-scheduling/exports/ /volume1/shared/cabin-backups/csv/
+docker compose -f docker-compose.nas.yml up -d app
 ```
+
+### 2. CSV auto-exports (app)
+
+When `EXPORT_PATH` is set, the API writes:
+
+- **Weekly** — Sunday after 02:00 **UTC**, for periods in open / draft / assignment / published
+- **On publish** and **on swap** (after publish)
+- Always also overwrites `latest_<PeriodName>.csv` (use this file first in a disaster)
+- Dated trail files (`weekly_…`, `published_…`, `swap_…`) are pruned after **56 days**; `latest_*` is kept
+
+Any signed-in member can still download a period CSV from **Periods → Download CSV**.
+
+### 3. Daily Postgres dump (host cron)
+
+From the compose project directory on the NAS:
+
+```bash
+chmod +x scripts/backup-db.sh   # once
+BACKUP_DIR=/mnt/tank/apps/cabin-scheduling/backups \
+  COMPOSE_FILE=docker-compose.nas.yml \
+  ./scripts/backup-db.sh
+```
+
+Writes `db/cabin_YYYY-MM-DD.sql` and overwrites `db/cabin_latest.sql`. Keeps dated dumps for **14 days**.
+
+Schedule daily with a TrueNAS Cron Job / Init script (example: 02:00 local), after containers are up. Run once manually and confirm files appear under `backups/db/`.
+
+Manual one-off (equivalent):
+
+```bash
+docker compose -f docker-compose.nas.yml exec -T db \
+  pg_dump -U cabin cabin_scheduling > /mnt/tank/apps/cabin-scheduling/backups/db/cabin_manual.sql
+```
+
+### 4. Off-box: TrueNAS Cloud Sync → Google Drive
+
+If backups only live on TrueNAS, they die with TrueNAS. Push the whole `backups` dataset off-box:
+
+1. TrueNAS → Credentials → Cloud Credentials → add **Google Drive** (OAuth).
+2. Data Protection → Cloud Sync Tasks → **Push** the backups dataset to a Drive folder (e.g. `CabinSchedulingBackups`).
+3. Schedule daily **after** the dump cron (e.g. dump at 02:00, sync at 03:00).
+4. Confirm once from a phone or laptop: open Drive, download `csv/latest_*.csv` and `db/cabin_latest.sql`.
+
+Occasional Google OAuth re-auth may be needed if Cloud Sync starts failing; that is normal.
+
+### 5. Disaster runbook
+
+**While the NAS is down (interim schedule)**
+
+1. From Google Drive, download `csv/latest_<PeriodName>.csv` for the active period.
+2. Use the Assignments, Notes, Sharing, and Swap history sections as the interim cabin schedule.
+
+**Rebuild after TrueNAS is back**
+
+1. Restore the compose project from git and restore `.env` (from your password manager / private note).
+2. Create the backups dataset again if needed; set `EXPORTS_HOST_PATH` / `EXPORT_PATH`.
+3. Start the stack (`docker compose -f docker-compose.nas.yml up -d`).
+4. Restore the database (stop the app first):
+
+```bash
+docker compose -f docker-compose.nas.yml stop app
+docker compose -f docker-compose.nas.yml exec -T db \
+  psql -U cabin cabin_scheduling < /mnt/tank/apps/cabin-scheduling/backups/db/cabin_latest.sql
+docker compose -f docker-compose.nas.yml start app
+```
+
+If the dump only exists in Google Drive, download `cabin_latest.sql` to the NAS first, then run the restore.
+5. Re-check the dump cron and Cloud Sync task are still scheduled.
+6. Confirm a fresh CSV appears under `backups/csv/` after the next weekly export (or publish a test period in a non-prod stack).
 
 ## Email deliverability
 
