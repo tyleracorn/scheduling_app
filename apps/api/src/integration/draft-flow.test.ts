@@ -1,6 +1,6 @@
 /**
  * Integration tests against PostgreSQL (DATABASE_URL required).
- * CI runs migrate deploy before `pnpm test`.
+ * CI runs migrate deploy before `pnpm test`; this suite upserts SystemSettings itself.
  */
 import { describe, it, before, after } from "node:test";
 import assert from "node:assert/strict";
@@ -34,7 +34,31 @@ type Fixture = {
   weekIds: string[];
 };
 
+/** Migrations create the table; seed/bootstrap normally inserts id=1. CI has no seed. */
+async function ensureSystemSettings() {
+  await prisma.systemSettings.upsert({
+    where: { id: 1 },
+    create: {
+      id: 1,
+      cabinTimezone: "America/Denver",
+      weekStartDay: 0,
+      weekSelectionsPerHousehold: 1,
+      pickWindowHours: 72,
+      pickWarningLeadHours: 24,
+      historyRetentionYears: 3,
+      periodWeekCount: 14,
+      openLeadDays: 30,
+      periodsToSchedule: 4,
+      householdSlotCount: 5,
+      draftStartLeadDays: 0,
+      maxCoordinatorHouseholds: 3,
+    },
+    update: {},
+  });
+}
+
 async function createFixture(): Promise<Fixture> {
+  await ensureSystemSettings();
   const id = `${tag}-${++fixtureSeq}`;
   const passwordHash = await bcrypt.hash("testpass123", 4);
   const openingAt = new Date(Date.UTC(2020, 0, 1));
