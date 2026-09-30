@@ -73,7 +73,7 @@ Use a GitHub **Personal Access Token** with `write:packages` (and `read:packages
 
 | Tag style | Example | Good for |
 |-----------|---------|----------|
-| Version | `v1.2.0` | Releases you roll back to |
+| Version | `v1.1.2` | Releases you roll back to |
 | Git commit | `4686e72` | “Exactly what I built from this commit” |
 | Date | `2026-06-27` | Ad-hoc deploys |
 | `latest` | `latest` | Convenience; NAS default if `APP_IMAGE_TAG` is unset |
@@ -81,8 +81,8 @@ Use a GitHub **Personal Access Token** with `write:packages` (and `read:packages
 3. **Build the image with that tag**:
 
 ```bash
-# Replace TAG with your tag (e.g. v1.2.0)
-export TAG=v1.2.0
+# Replace TAG with your tag (e.g. v1.1.2)
+export TAG=v1.1.2
 docker build -t ghcr.io/tyleracorn/scheduling_app:$TAG .
 ```
 
@@ -103,7 +103,7 @@ docker push ghcr.io/tyleracorn/scheduling_app:latest
 5. **On the NAS**, set the same tag in `.env` so compose pulls the image you just pushed:
 
 ```bash
-APP_IMAGE_TAG=v1.2.0
+APP_IMAGE_TAG=v1.1.2
 ```
 
 Then pull and restart (see below).
@@ -111,7 +111,7 @@ Then pull and restart (see below).
 **Quick copy-paste** (version tag):
 
 ```bash
-export TAG=v1.2.0
+export TAG=v1.1.2
 docker build -t ghcr.io/tyleracorn/scheduling_app:$TAG .
 docker push ghcr.io/tyleracorn/scheduling_app:$TAG
 ```
