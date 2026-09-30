@@ -85,7 +85,7 @@ export function HelpPage() {
                 "Log in with your email and password. You’ll land on Calendar.",
                 "Forgot your password? Use Forgot password on the login screen, then follow the reset email.",
               ]}
-              tip="Your email and household are set by an administrator — you can change your display name and password in Settings."
+              tip="Your email and household assignment are set by an administrator — you can change your display name, password, household name, and calendar shortcode in Settings."
             />
 
             <HelpSection
@@ -161,6 +161,7 @@ export function HelpPage() {
               title="Settings"
               steps={[
                 "Open Settings to update your display name or change your password.",
+                "Edit your household name and shortcode (1–3 characters shown on calendar badges). Any household member can change these.",
                 "Set calendar display preferences: default green/red choice when picking, and how strongly occupancy shows on day cells.",
                 "If you are in a coordinator household, you may see a Scheduling tools toggle — turn it on to show Coordinate and Periods in the nav.",
               ]}
@@ -258,7 +259,7 @@ export function HelpPage() {
               title="First-time admin setup"
               steps={[
                 "Admin → People — invite household members by email.",
-                "Admin → Households — set colors, mark Worker Bee, and set coordinator household authority (scheduling tools).",
+                "Admin → Households — set names, shortcodes, colors, mark Worker Bee, and set coordinator household authority (scheduling tools).",
                 "Members of a coordinator household turn on Scheduling tools in Settings to see Coordinate and Periods.",
                 "Admin → System — pick window and related defaults (admins only).",
               ]}
