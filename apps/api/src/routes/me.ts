@@ -3,6 +3,8 @@ import { z } from "zod";
 import { AppError } from "../lib/errors.js";
 import { prisma } from "../lib/prisma.js";
 import { hashPassword, verifyPassword } from "../lib/password.js";
+import { config } from "../lib/config.js";
+import { destroyOtherUserSessions } from "../lib/session.js";
 import {
   canUseSchedulingTools,
   hasCoordinatorHouseholdTier,
@@ -160,6 +162,8 @@ export async function meRoutes(app: FastifyInstance) {
       where: { id: authUser.id },
       data: { passwordHash },
     });
+    await destroyOtherUserSessions(authUser.id, request.cookies[config.sessionCookieName]);
+    request.log.info({ action: "change_password", userId: authUser.id }, "password changed");
     return { ok: true };
   });
 }

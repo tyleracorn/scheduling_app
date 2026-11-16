@@ -41,3 +41,15 @@ export async function destroySession(sessionId: string | undefined): Promise<voi
   if (!sessionId) return;
   await prisma.session.delete({ where: { id: sessionId } }).catch(() => {});
 }
+
+export async function destroyOtherUserSessions(
+  userId: string,
+  keepSessionId: string | undefined,
+): Promise<void> {
+  await prisma.session.deleteMany({
+    where: {
+      userId,
+      ...(keepSessionId ? { id: { not: keepSessionId } } : {}),
+    },
+  });
+}

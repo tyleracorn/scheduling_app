@@ -145,26 +145,40 @@ export async function authRoutes(app: FastifyInstance) {
     }
     const email = normalizeEmail(parsed.data.email);
     const user = await prisma.user.findUnique({ where: { email } });
-    if (user?.active) {
-      const token = generateToken();
-      await prisma.passwordResetToken.create({
-        data: {
-          userId: user.id,
-          tokenHash: hashToken(token),
-          expiresAt: new Date(Date.now() + 60 * 60 * 1000),
-        },
-      });
-      const link = resetPasswordLink(token);
-      await sendEmail(
-        email,
-        "Reset your cabin scheduling password",
-        `Use this link to reset your password (valid 1 hour):\n\n${link}`,
+    if (!user?.active) {
+      request.log.info(
+        { action: "forgot_password", email, account: user ? "inactive" : "missing" },
+        "password reset skipped",
       );
+      return { ok: true, message: "If that email exists, a reset link was sent." };
     }
+    const token = generateToken();
+    await prisma.passwordResetToken.create({
+      data: {
+        userId: user.id,
+        tokenHash: hashToken(token),
+        expiresAt: new Date(Date.now() + 60 * 60 * 1000),
+      },
+    });
+    const link = resetPasswordLink(token);
+    const delivery = await sendEmail(
+      email,
+      "Reset your cabin scheduling password",
+      `Use this link to reset your password (valid 1 hour):\n\n${link}`,
+    );
+    request.log.info(
+      {
+        action: "forgot_password",
+        email,
+        delivery,
+        ...(delivery === "dev_log" ? { link } : {}),
+      },
+      "password reset email",
+    );
     return { ok: true, message: "If that email exists, a reset link was sent." };
   });
 
-  app.post("/api/v1/auth/reset-password", async (request) => {
+  app.post("/api/v1/auth/reset-password", async (request, reply) => {
     const parsed = resetSchema.safeParse(request.body);
     if (!parsed.success) {
       throw new AppError(400, "validation_error", "Invalid payload");
@@ -181,7 +195,10 @@ export async function authRoutes(app: FastifyInstance) {
     await prisma.$transaction([
       prisma.user.update({ where: { id: record.userId }, data: { passwordHash } }),
       prisma.passwordResetToken.update({ where: { id: record.id }, data: { usedAt: new Date() } }),
+      prisma.session.deleteMany({ where: { userId: record.userId } }),
     ]);
+    clearSessionCookie(reply);
+    request.log.info({ action: "reset_password", userId: record.userId }, "password reset");
     return { ok: true };
   });
 }
