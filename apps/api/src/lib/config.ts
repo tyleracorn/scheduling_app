@@ -8,8 +8,20 @@ function required(name: string): string {
 
 const isProduction = process.env.NODE_ENV === "production";
 
+const LOG_LEVELS = ["fatal", "error", "warn", "info", "debug", "trace", "silent"] as const;
+type LogLevel = (typeof LOG_LEVELS)[number];
+
+function readLogLevel(): LogLevel {
+  const raw = (process.env.LOG_LEVEL ?? "info").toLowerCase();
+  if ((LOG_LEVELS as readonly string[]).includes(raw)) {
+    return raw as LogLevel;
+  }
+  return "info";
+}
+
 export const config = {
   nodeEnv: process.env.NODE_ENV ?? "development",
+  logLevel: readLogLevel(),
   port: Number(process.env.PORT ?? 3000),
   databaseUrl: process.env.DATABASE_URL ?? "postgresql://cabin:cabin@localhost:5432/cabin_scheduling",
   sessionSecret: isProduction

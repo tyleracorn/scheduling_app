@@ -16,6 +16,8 @@ Self-host the cabin scheduling app on a NAS or home server using Docker.
 cp .env.example .env
 ```
 
+Leave `SEED_DEMO=false` (the example default). Sample calendar data is for local development only (`pnpm db:seed:demo`). A NAS image pull should copy [`.env.nas.example`](../.env.nas.example) instead of this file.
+
 Edit `.env`:
 
 | Variable | Required | Notes |
@@ -24,7 +26,8 @@ Edit `.env`:
 | `APP_URL` | Yes | Public URL users open in browser (e.g. `https://cabin.example.com`) |
 | `SEED_ADMIN_EMAIL` | Yes | First admin login |
 | `SEED_ADMIN_PASSWORD` | Yes | Change after first login |
-| `SMTP_HOST` | No | Leave empty to log emails only |
+| `SMTP_HOST` | No | Leave empty to log recipient and subject only (not the message) |
+| `LOG_LEVEL` | No | `info` by default. Use `warn` for a quieter NAS log |
 | `SMTP_PORT` | No | Default 587 |
 | `SMTP_USER` / `SMTP_PASS` | No | If your SMTP server requires auth |
 | `SMTP_FROM` | No | From address for notifications |

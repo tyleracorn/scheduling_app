@@ -22,7 +22,9 @@ import { householdsRoutes } from "./routes/households.js";
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export async function buildApp() {
-  const app = Fastify({ logger: config.nodeEnv !== "test" });
+  const app = Fastify({
+    logger: config.nodeEnv === "test" ? false : { level: config.logLevel },
+  });
 
   await app.register(cookie, { secret: config.sessionSecret });
 
@@ -44,11 +46,29 @@ export async function buildApp() {
   await app.register(settingsRoutes);
   await app.register(householdsRoutes);
 
-  app.setErrorHandler((error, _request, reply) => {
+  app.setErrorHandler((error, request, reply) => {
+    const context = {
+      method: request.method,
+      url: request.url,
+      userId: request.user?.id,
+      householdId: request.user?.householdId ?? undefined,
+    };
+
     if (error instanceof AppError) {
+      const fields = {
+        ...context,
+        statusCode: error.statusCode,
+        code: error.code,
+      };
+      if (error.statusCode >= 500) {
+        request.log.error(fields, "request failed");
+      } else {
+        request.log.warn(fields, "request rejected");
+      }
       return reply.status(error.statusCode).send(errorBody(error.code, error.message, error.details));
     }
-    app.log.error(error);
+
+    request.log.error({ ...context, err: error }, "request failed");
     return reply.status(500).send(errorBody("internal_error", "Internal server error"));
   });
 

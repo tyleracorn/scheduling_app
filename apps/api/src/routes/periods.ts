@@ -1,4 +1,4 @@
-import type { FastifyInstance } from "fastify";
+import type { FastifyInstance, FastifyRequest } from "fastify";
 import fp from "fastify-plugin";
 import { z } from "zod";
 import type { PeriodStatus } from "@prisma/client";
@@ -111,6 +111,27 @@ const swapWeeksSchema = z.object({
   occupancy_b: z.enum(["green", "red"]).nullable().optional(),
   reason: z.string().min(1).max(500),
 });
+
+function logScheduleAction(
+  request: FastifyRequest,
+  action: string,
+  fields: {
+    periodId?: string;
+    turnId?: string;
+    householdId?: string | null;
+    weekId?: string | null;
+    weekIdB?: string | null;
+  },
+) {
+  const payload: Record<string, string> = { action };
+  if (request.user?.id) payload.userId = request.user.id;
+  if (fields.periodId) payload.periodId = fields.periodId;
+  if (fields.turnId) payload.turnId = fields.turnId;
+  if (fields.householdId) payload.householdId = fields.householdId;
+  if (fields.weekId) payload.weekId = fields.weekId;
+  if (fields.weekIdB) payload.weekIdB = fields.weekIdB;
+  request.log.info(payload, "schedule action");
+}
 
 async function periodsRoutes(app: FastifyInstance) {
   app.get("/api/v1/periods", async (request) => {
@@ -230,6 +251,7 @@ async function periodsRoutes(app: FastifyInstance) {
     requireCoordinator(request);
     const { id } = request.params as { id: string };
     const draft = await startDraft(id);
+    logScheduleAction(request, "start_draft", { periodId: id, householdId: request.user?.householdId });
     return { draft };
   });
 
@@ -245,6 +267,7 @@ async function periodsRoutes(app: FastifyInstance) {
     const { id } = request.params as { id: string };
     const parsed = resumeSchema.safeParse(request.body ?? {});
     const draft = await resumeDraft(id, parsed.data?.reset_auto_skip_counter ?? true);
+    logScheduleAction(request, "resume_draft", { periodId: id, householdId: request.user?.householdId });
     return { draft };
   });
 
@@ -253,12 +276,18 @@ async function periodsRoutes(app: FastifyInstance) {
     if (!user.householdId) {
       throw new AppError(403, "forbidden", "You must belong to a household");
     }
-    const { turnId } = request.params as { periodId: string; turnId: string };
+    const { periodId, turnId } = request.params as { periodId: string; turnId: string };
     const parsed = pickSchema.safeParse(request.body);
     if (!parsed.success) {
       throw new AppError(400, "validation_error", "period_week_id required");
     }
     const draft = await pickWeek(turnId, parsed.data.period_week_id, user.id, user.householdId);
+    logScheduleAction(request, "pick", {
+      periodId,
+      turnId,
+      householdId: user.householdId,
+      weekId: parsed.data.period_week_id,
+    });
     return { draft };
   });
 
@@ -267,8 +296,9 @@ async function periodsRoutes(app: FastifyInstance) {
     if (!user.householdId) {
       throw new AppError(403, "forbidden", "You must belong to a household");
     }
-    const { turnId } = request.params as { periodId: string; turnId: string };
+    const { periodId, turnId } = request.params as { periodId: string; turnId: string };
     const draft = await skipTurn(turnId, user.id, user.householdId);
+    logScheduleAction(request, "skip", { periodId, turnId, householdId: user.householdId });
     return { draft };
   });
 
@@ -277,12 +307,18 @@ async function periodsRoutes(app: FastifyInstance) {
     if (!user.householdId) {
       throw new AppError(403, "forbidden", "You must belong to a household");
     }
-    const { turnId } = request.params as { periodId: string; turnId: string };
+    const { periodId, turnId } = request.params as { periodId: string; turnId: string };
     const parsed = pickSchema.safeParse(request.body);
     if (!parsed.success) {
       throw new AppError(400, "validation_error", "period_week_id required");
     }
     const draft = await changePick(turnId, parsed.data.period_week_id, user.id, user.householdId);
+    logScheduleAction(request, "change_pick", {
+      periodId,
+      turnId,
+      householdId: user.householdId,
+      weekId: parsed.data.period_week_id,
+    });
     return { draft };
   });
 
@@ -292,7 +328,7 @@ async function periodsRoutes(app: FastifyInstance) {
     if (!isCoordinator && !user.householdId) {
       throw new AppError(403, "forbidden", "You must belong to a household");
     }
-    const { turnId } = request.params as { periodId: string; turnId: string };
+    const { periodId, turnId } = request.params as { periodId: string; turnId: string };
     const parsed = revisePickSchema.safeParse(request.body ?? {});
     if (!parsed.success) {
       throw new AppError(400, "validation_error", "period_week_id required (use null to release)");
@@ -305,6 +341,12 @@ async function periodsRoutes(app: FastifyInstance) {
       parsed.data.period_week_id,
       parsed.data.occupancy_status,
     );
+    logScheduleAction(request, "revise_pick", {
+      periodId,
+      turnId,
+      householdId: user.householdId,
+      weekId: parsed.data.period_week_id,
+    });
     return { draft };
   });
 
@@ -313,7 +355,7 @@ async function periodsRoutes(app: FastifyInstance) {
     if (!user.householdId) {
       throw new AppError(403, "forbidden", "You must belong to a household");
     }
-    const { turnId } = request.params as { periodId: string; turnId: string };
+    const { periodId, turnId } = request.params as { periodId: string; turnId: string };
     const parsed = confirmPickSchema.safeParse(request.body ?? {});
     const draft = await confirmPick(
       turnId,
@@ -321,6 +363,7 @@ async function periodsRoutes(app: FastifyInstance) {
       user.householdId,
       parsed.data?.occupancy_status,
     );
+    logScheduleAction(request, "confirm_pick", { periodId, turnId, householdId: user.householdId });
     return { draft };
   });
 
@@ -380,7 +423,7 @@ async function periodsRoutes(app: FastifyInstance) {
     if (!parsed.success) {
       throw new AppError(400, "validation_error", "Invalid swap request", parsed.error.flatten());
     }
-    return await swapWeeks(
+    const result = await swapWeeks(
       periodId,
       parsed.data.week_a_id,
       parsed.data.week_b_id,
@@ -392,12 +435,21 @@ async function periodsRoutes(app: FastifyInstance) {
       parsed.data.occupancy_b,
       parsed.data.reason,
     );
+    logScheduleAction(request, "swap", {
+      periodId,
+      householdId: user.householdId,
+      weekId: parsed.data.week_a_id,
+      weekIdB: parsed.data.week_b_id,
+    });
+    return result;
   });
 
   app.post("/api/v1/periods/:id/publish", async (request) => {
     const user = requireCoordinator(request);
     const { id } = request.params as { id: string };
-    return await publishPeriod(id, user.id);
+    const result = await publishPeriod(id, user.id);
+    logScheduleAction(request, "publish", { periodId: id, householdId: user.householdId });
+    return result;
   });
 
   app.get("/api/v1/periods/:id/export", async (request, reply) => {
@@ -417,14 +469,15 @@ async function periodsRoutes(app: FastifyInstance) {
 
   app.post("/api/v1/periods/:periodId/turns/:turnId/force-skip", async (request) => {
     const user = requireCoordinator(request);
-    const { turnId } = request.params as { periodId: string; turnId: string };
+    const { periodId, turnId } = request.params as { periodId: string; turnId: string };
     const draft = await coordinatorForceSkip(turnId, user.id);
+    logScheduleAction(request, "force_skip", { periodId, turnId, householdId: user.householdId });
     return { draft };
   });
 
   app.post("/api/v1/periods/:periodId/turns/:turnId/coordinator-pick", async (request) => {
     const user = requireCoordinator(request);
-    const { turnId } = request.params as { periodId: string; turnId: string };
+    const { periodId, turnId } = request.params as { periodId: string; turnId: string };
     const parsed = pickSchema.safeParse(request.body);
     if (!parsed.success) {
       throw new AppError(400, "validation_error", "period_week_id required");
@@ -435,6 +488,12 @@ async function periodsRoutes(app: FastifyInstance) {
       user.id,
       parsed.data.occupancy_status,
     );
+    logScheduleAction(request, "coordinator_pick", {
+      periodId,
+      turnId,
+      householdId: user.householdId,
+      weekId: parsed.data.period_week_id,
+    });
     return { draft };
   });
 }

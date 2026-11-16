@@ -31,6 +31,8 @@ pnpm db:migrate:deploy
 pnpm db:seed
 ```
 
+`pnpm db:seed` creates the admin, households, and settings. For a sample calendar, run `pnpm db:seed:demo` instead.
+
 For interactive migration naming during development, use `pnpm db:migrate` instead of `db:migrate:deploy`.
 
 Always run database commands from the **repo root** so `DATABASE_URL` from `.env` is loaded.
@@ -47,12 +49,17 @@ pnpm dev
 
 See [docs/production-deployment.md](./docs/production-deployment.md).
 
+Build on the machine that will run the app (leave `SEED_DEMO=false`):
+
 ```bash
 cp .env.example .env
-# Set SESSION_SECRET, APP_URL (public URL), SMTP_* optional
+# Set SESSION_SECRET, APP_URL (public URL), SMTP_* optional.
+# Leave SEED_DEMO=false so startup does not load sample calendar data.
 
 docker compose up -d --build
 ```
+
+NAS image pulls use [`.env.nas.example`](./.env.nas.example) instead of `.env.example`.
 
 Point your NAS reverse proxy at port **3000**. The app container serves the API and static UI.
 

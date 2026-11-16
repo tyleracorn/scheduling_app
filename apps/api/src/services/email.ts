@@ -26,7 +26,7 @@ export function getSmtpStatus() {
 export async function sendEmail(to: string, subject: string, text: string, html?: string): Promise<void> {
   const transport = getTransport();
   if (!transport) {
-    console.info("[email:dev]", { to, subject, text });
+    console.info("[email:dev]", { to, subject });
     return;
   }
   await transport.sendMail({
