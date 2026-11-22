@@ -3,9 +3,11 @@ import { fileURLToPath } from "node:url";
 import Fastify from "fastify";
 import cookie from "@fastify/cookie";
 import cors from "@fastify/cors";
+import helmet from "@fastify/helmet";
 import fastifyStatic from "@fastify/static";
 import { AppError, errorBody } from "./lib/errors.js";
 import { config } from "./lib/config.js";
+import { redactTokenQuery } from "./lib/redact-url.js";
 import authPlugin from "./plugins/auth.js";
 import { healthRoutes } from "./routes/health.js";
 import { authRoutes } from "./routes/auth.js";
@@ -23,7 +25,38 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
 export async function buildApp() {
   const app = Fastify({
-    logger: config.nodeEnv === "test" ? false : { level: config.logLevel },
+    // One hop: the reverse proxy is the socket peer. Further X-Forwarded-For
+    // entries are not trusted. Numeric trustProxy is a no-op in Fastify 5.12.
+    trustProxy: config.trustProxy ? (_address, hop) => hop === 0 : false,
+    logger:
+      config.nodeEnv === "test"
+        ? false
+        : {
+            level: config.logLevel,
+            serializers: {
+              req(request) {
+                const acceptVersion = request.headers["accept-version"];
+                return {
+                  method: request.method,
+                  url: redactTokenQuery(request.url),
+                  version: Array.isArray(acceptVersion) ? acceptVersion[0] : acceptVersion,
+                  host: request.host,
+                  remoteAddress: request.ip,
+                  remotePort: request.socket?.remotePort,
+                };
+              },
+            },
+          },
+  });
+
+  await app.register(helmet, {
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        frameAncestors: ["'none'"],
+      },
+    },
+    xFrameOptions: { action: "deny" },
   });
 
   await app.register(cookie, { secret: config.sessionSecret });
@@ -49,7 +82,7 @@ export async function buildApp() {
   app.setErrorHandler((error, request, reply) => {
     const context = {
       method: request.method,
-      url: request.url,
+      url: redactTokenQuery(request.url),
       userId: request.user?.id,
       householdId: request.user?.householdId ?? undefined,
     };

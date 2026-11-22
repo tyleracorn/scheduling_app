@@ -19,9 +19,16 @@ function readLogLevel(): LogLevel {
   return "info";
 }
 
+function readTrustProxy(): boolean {
+  const raw = (process.env.TRUST_PROXY ?? "").trim().toLowerCase();
+  return raw === "1" || raw === "true";
+}
+
 export const config = {
   nodeEnv: process.env.NODE_ENV ?? "development",
   logLevel: readLogLevel(),
+  /** Trust one reverse-proxy hop for the client IP. Off unless TRUST_PROXY is set. */
+  trustProxy: readTrustProxy(),
   port: Number(process.env.PORT ?? 3000),
   databaseUrl: process.env.DATABASE_URL ?? "postgresql://cabin:cabin@localhost:5432/cabin_scheduling",
   sessionSecret: isProduction

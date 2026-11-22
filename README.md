@@ -53,7 +53,7 @@ Build on the machine that will run the app (leave `SEED_DEMO=false`):
 
 ```bash
 cp .env.example .env
-# Set SESSION_SECRET, APP_URL (public URL), SMTP_* optional.
+# Set SESSION_SECRET, APP_URL (public URL), POSTGRES_PASSWORD, and SEED_ADMIN_PASSWORD.
 # Leave SEED_DEMO=false so startup does not load sample calendar data.
 
 docker compose up -d --build

@@ -1,17 +1,11 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import { csvEscape } from "../lib/csv.js";
 import { toDateString } from "../lib/dates.js";
 import { formatHowAssigned } from "../lib/assignment-labels.js";
 import { periodBoundsFromWeeks } from "../lib/period-weeks.js";
 import { config } from "../lib/config.js";
 import { prisma } from "../lib/prisma.js";
-
-function csvEscape(value: string): string {
-  if (value.includes(",") || value.includes('"') || value.includes("\n")) {
-    return `"${value.replace(/"/g, '""')}"`;
-  }
-  return value;
-}
 
 function csvRow(cells: string[]): string {
   return cells.map(csvEscape).join(",");

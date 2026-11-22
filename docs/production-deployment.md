@@ -22,10 +22,12 @@ Edit `.env`:
 
 | Variable | Required | Notes |
 |----------|----------|-------|
-| `SESSION_SECRET` | Yes | `openssl rand -base64 32` |
+| `SESSION_SECRET` | Yes | `openssl rand -base64 32`. Does not log people out when rotated |
+| `TRUST_PROXY` | When behind one proxy | `true` so login limits see the visitor IP. Set this only if clients cannot reach port 3000 directly |
 | `APP_URL` | Yes | Public URL users open in browser (e.g. `https://cabin.example.com`) |
+| `POSTGRES_PASSWORD` | Yes | Password for the Postgres container. An existing volume created with the old default still uses `cabin` until you change Postgres itself |
 | `SEED_ADMIN_EMAIL` | Yes | First admin login |
-| `SEED_ADMIN_PASSWORD` | Yes | Change after first login |
+| `SEED_ADMIN_PASSWORD` | Yes | No default. Change after first login |
 | `SMTP_HOST` | No | Leave empty to log recipient and subject only (not the message) |
 | `LOG_LEVEL` | No | `info` by default. Use `warn` for a quieter NAS log |
 | `SMTP_PORT` | No | Default 587 |
@@ -355,9 +357,11 @@ SMTP credentials are **not** stored in the database. Configure `SMTP_*` in `.env
 
 ## Security notes
 
-- Session cookies use `SameSite=Lax` — suitable for same-origin deployment behind one HTTPS hostname
-- Do not expose port 3000 directly to the internet without the reverse proxy handling TLS
-- Rotate `SESSION_SECRET` only with a planned logout (invalidates all sessions)
+- Session cookies are random tokens stored only as a SHA-256 hash. `HttpOnly`, `Secure` in production, and `SameSite=Lax`. A database dump does not contain a usable cookie.
+- Rotating `SESSION_SECRET` does not log anyone out. Delete `sessions` rows, or wait for the 14-day expiry, to end logins. Applying the hashed-session migration signs everyone out once.
+- Set `TRUST_PROXY=true` when a single HTTPS reverse proxy is in front of the app, so login rate limits use the visitor IP. If that proxy shares a Docker network with the app, remove the `ports:` mapping for port 3000. Leaving 3000 published while trusting forwarded headers lets someone on the LAN spoof the client IP.
+- Do not expose port 3000 directly to the internet. TLS belongs on the reverse proxy. Also send HSTS from that proxy (`Strict-Transport-Security`), because the browser only sees the proxy's HTTPS response. The app sets the usual browser headers (including HSTS and `frame-ancestors 'none'`) on its own responses; the proxy should forward them.
+- Login and forgot-password requests are limited per client IP and per email.
 
 ## Coordinator dry-run
 

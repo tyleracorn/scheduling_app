@@ -3,13 +3,13 @@ services:
     image: postgres:16-alpine
     restart: unless-stopped
     environment:
-      POSTGRES_USER: cabin
-      POSTGRES_PASSWORD: cabin
-      POSTGRES_DB: cabin_scheduling
+      POSTGRES_USER: ${POSTGRES_USER:-cabin}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?Set POSTGRES_PASSWORD in .env}
+      POSTGRES_DB: ${POSTGRES_DB:-cabin_scheduling}
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U cabin -d cabin_scheduling"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-cabin} -d ${POSTGRES_DB:-cabin_scheduling}"]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -18,16 +18,21 @@ services:
     build: .
     restart: unless-stopped
     ports:
+      # Publishing 3000 opens the app on the LAN without TLS.
+      # If the reverse proxy shares a Docker network with this app, delete
+      # this mapping so only the proxy can reach it.
       - "3000:3000"
     environment:
-      DATABASE_URL: postgresql://cabin:cabin@db:5432/cabin_scheduling
+      DATABASE_URL: postgresql://${POSTGRES_USER:-cabin}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-cabin_scheduling}
       NODE_ENV: production
       PORT: 3000
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Set TRUST_PROXY=true only when a single reverse proxy is the path clients use.
+      TRUST_PROXY: ${TRUST_PROXY:-}
       SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in .env}
       APP_URL: ${APP_URL:-http://localhost:3000}
       SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:-admin@example.com}
-      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:-changeme}
+      SEED_ADMIN_PASSWORD: ${SEED_ADMIN_PASSWORD:?Set SEED_ADMIN_PASSWORD in .env}
       SMTP_HOST: ${SMTP_HOST:-}
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}

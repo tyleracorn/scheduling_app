@@ -37,13 +37,17 @@ services:
     pull_policy: always
     restart: unless-stopped
     ports:
-      # Omit this port mapping if your reverse proxy joins cabin_proxy below.
+      # Publishing 3000 opens the app on the NAS LAN without TLS.
+      # If your reverse proxy joins cabin_internal (or cabin_proxy below),
+      # delete this mapping so only the proxy can reach the app.
       - "${APP_HOST_PORT:-3000}:3000"
     environment:
       DATABASE_URL: postgresql://${POSTGRES_USER:-cabin}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-cabin_scheduling}
       NODE_ENV: production
       PORT: 3000
       LOG_LEVEL: ${LOG_LEVEL:-info}
+      # Set TRUST_PROXY=true only when a single reverse proxy is the path clients use.
+      TRUST_PROXY: ${TRUST_PROXY:-}
       SESSION_SECRET: ${SESSION_SECRET:?Set SESSION_SECRET in .env}
       APP_URL: ${APP_URL:?Set APP_URL in .env}
       SEED_ADMIN_EMAIL: ${SEED_ADMIN_EMAIL:?Set SEED_ADMIN_EMAIL in .env}

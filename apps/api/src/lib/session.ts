@@ -1,30 +1,33 @@
 import type { FastifyReply } from "fastify";
 import { config } from "./config.js";
 import { prisma } from "./prisma.js";
+import { generateToken, hashToken } from "./tokens.js";
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
 export async function createSession(userId: string): Promise<string> {
+  const token = generateToken();
   const expiresAt = new Date(Date.now() + config.sessionDays * MS_PER_DAY);
-  const session = await prisma.session.create({
-    data: { userId, expiresAt },
+  await prisma.session.create({
+    data: { userId, expiresAt, tokenHash: hashToken(token) },
   });
-  return session.id;
+  return token;
 }
 
-export async function getSessionUserId(sessionId: string | undefined): Promise<string | null> {
-  if (!sessionId) return null;
-  const session = await prisma.session.findUnique({ where: { id: sessionId } });
+export async function getSessionUserId(sessionToken: string | undefined): Promise<string | null> {
+  if (!sessionToken) return null;
+  const tokenHash = hashToken(sessionToken);
+  const session = await prisma.session.findUnique({ where: { tokenHash } });
   if (!session || session.expiresAt < new Date()) {
-    if (session) await prisma.session.delete({ where: { id: sessionId } }).catch(() => {});
+    if (session) await prisma.session.delete({ where: { tokenHash } }).catch(() => {});
     return null;
   }
   return session.userId;
 }
 
-export function setSessionCookie(reply: FastifyReply, sessionId: string): void {
+export function setSessionCookie(reply: FastifyReply, sessionToken: string): void {
   const maxAge = config.sessionDays * 24 * 60 * 60;
-  reply.setCookie(config.sessionCookieName, sessionId, {
+  reply.setCookie(config.sessionCookieName, sessionToken, {
     path: "/",
     httpOnly: true,
     secure: config.isProduction,
@@ -37,19 +40,19 @@ export function clearSessionCookie(reply: FastifyReply): void {
   reply.clearCookie(config.sessionCookieName, { path: "/" });
 }
 
-export async function destroySession(sessionId: string | undefined): Promise<void> {
-  if (!sessionId) return;
-  await prisma.session.delete({ where: { id: sessionId } }).catch(() => {});
+export async function destroySession(sessionToken: string | undefined): Promise<void> {
+  if (!sessionToken) return;
+  await prisma.session.delete({ where: { tokenHash: hashToken(sessionToken) } }).catch(() => {});
 }
 
 export async function destroyOtherUserSessions(
   userId: string,
-  keepSessionId: string | undefined,
+  keepSessionToken: string | undefined,
 ): Promise<void> {
   await prisma.session.deleteMany({
     where: {
       userId,
-      ...(keepSessionId ? { id: { not: keepSessionId } } : {}),
+      ...(keepSessionToken ? { tokenHash: { not: hashToken(keepSessionToken) } } : {}),
     },
   });
 }

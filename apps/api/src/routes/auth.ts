@@ -2,7 +2,7 @@ import type { FastifyInstance } from "fastify";
 import { z } from "zod";
 import { AppError, errorBody } from "../lib/errors.js";
 import { prisma } from "../lib/prisma.js";
-import { hashPassword, verifyPassword } from "../lib/password.js";
+import { hashPassword, passwordMatches } from "../lib/password.js";
 import { generateToken, hashToken, normalizeEmail } from "../lib/tokens.js";
 import {
   clearSessionCookie,
@@ -14,12 +14,25 @@ import { config } from "../lib/config.js";
 import { sendEmail, inviteLink, resetPasswordLink } from "../services/email.js";
 import { checkRateLimit, rateLimitKey } from "../lib/rate-limit.js";
 
-function enforceRateLimit(request: { ip: string }, route: string) {
-  const ip = request.ip || "unknown";
-  const result = checkRateLimit(rateLimitKey(ip, route), 20, 15 * 60 * 1000);
+// Account limit stops password guessing. The IP limit is looser so one
+// cabin network can sign in together after a deploy.
+const ACCOUNT_LIMIT = 10;
+const IP_LIMIT = 30;
+const AUTH_WINDOW_MS = 15 * 60 * 1000;
+
+function enforceLimit(key: string, max: number) {
+  const result = checkRateLimit(key, max, AUTH_WINDOW_MS);
   if (!result.allowed) {
     throw new AppError(429, "rate_limited", "Too many attempts. Try again later.");
   }
+}
+
+function enforceIpLimit(ip: string, route: string) {
+  enforceLimit(rateLimitKey(ip || "unknown", route), IP_LIMIT);
+}
+
+function enforceAccountLimit(account: string, route: string) {
+  enforceLimit(rateLimitKey(account, `${route}:account`), ACCOUNT_LIMIT);
 }
 
 const loginSchema = z.object({
@@ -49,18 +62,17 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/v1/auth/login", async (request, reply) => {
-    enforceRateLimit(request, "login");
+    enforceIpLimit(request.ip, "login");
     const parsed = loginSchema.safeParse(request.body);
     if (!parsed.success) {
       throw new AppError(400, "validation_error", "Invalid login payload", parsed.error.flatten());
     }
     const email = normalizeEmail(parsed.data.email);
+    enforceAccountLimit(email, "login");
     const user = await prisma.user.findUnique({ where: { email } });
-    if (!user || !user.active) {
-      throw new AppError(401, "invalid_credentials", "Invalid email or password");
-    }
-    const ok = await verifyPassword(parsed.data.password, user.passwordHash);
-    if (!ok) {
+    const hash = user?.active ? user.passwordHash : null;
+    const ok = await passwordMatches(parsed.data.password, hash);
+    if (!ok || !user) {
       throw new AppError(401, "invalid_credentials", "Invalid email or password");
     }
     const sessionId = await createSession(user.id);
@@ -138,12 +150,13 @@ export async function authRoutes(app: FastifyInstance) {
   });
 
   app.post("/api/v1/auth/forgot-password", async (request) => {
-    enforceRateLimit(request, "forgot-password");
+    enforceIpLimit(request.ip, "forgot-password");
     const parsed = forgotSchema.safeParse(request.body);
     if (!parsed.success) {
       throw new AppError(400, "validation_error", "Invalid email");
     }
     const email = normalizeEmail(parsed.data.email);
+    enforceAccountLimit(email, "forgot-password");
     const user = await prisma.user.findUnique({ where: { email } });
     if (!user?.active) {
       request.log.info(
