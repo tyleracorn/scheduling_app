@@ -16,7 +16,7 @@ Single source of truth for cabin scheduling invariants. Prefer this over archive
 - Special household (`isWorkerBee`). At most one.
 - Excluded from draft priority lists and turns.
 - Cannot be a coordinator household.
-- Assigned only in the **assignment** (or published reassign) phase by coordinators.
+- A coordinator may reserve one week when starting the draft by hand. Otherwise assign it in the **assignment** phase, after pick rounds and before publish. Published changes still require a reason. Automatic draft start does not reserve a week.
 
 ## Priority across periods
 

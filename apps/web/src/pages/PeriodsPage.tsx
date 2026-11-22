@@ -6,6 +6,7 @@ import { calendarPathForPeriod, coordinatePathForPeriod } from "../lib/period-na
 import { useAuth } from "../context/AuthContext";
 import { PeriodPlanForm } from "../components/PeriodPlanForm";
 import { PeriodPriorityEditor, PeriodPriorityReadOnly } from "../components/PeriodPriorityEditor";
+import { StartDraftDialog } from "../components/StartDraftDialog";
 
 function statusLabel(status: string) {
   const map: Record<string, string> = {
@@ -39,6 +40,7 @@ export function PeriodsPage() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+  const [draftPeriod, setDraftPeriod] = useState<Period | null>(null);
 
   const isCoordinator = !!(user?.isCoordinator || user?.isAdmin);
 
@@ -72,18 +74,18 @@ export function PeriodsPage() {
     }
   }
 
-  async function startDraft(id: string) {
-    if (!confirm("Start the draft? Households will be notified.")) return;
-    setBusy(true);
+  function openStartDraft(period: Period) {
     setError(null);
+    setDraftPeriod(period);
+  }
+
+  async function handleDraftStarted(period: Period) {
+    setDraftPeriod(null);
     try {
-      await api.startDraft(id);
-      const detail = await api.period(id);
+      const detail = await api.period(period.id);
       navigate(coordinatePathForPeriod(detail.period.start_date, detail.period.id));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Start draft failed");
-    } finally {
-      setBusy(false);
+      setError(err instanceof Error ? err.message : "Draft started, but the calendar could not be opened");
     }
   }
 
@@ -196,7 +198,7 @@ export function PeriodsPage() {
                     <button
                       type="button"
                       disabled={busy}
-                      onClick={() => void startDraft(p.id)}
+                      onClick={() => openStartDraft(p)}
                       className="rounded bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-700 disabled:opacity-50"
                     >
                       Start draft
@@ -266,6 +268,14 @@ export function PeriodsPage() {
             </li>
           ))}
         </ul>
+      )}
+
+      {draftPeriod && (
+        <StartDraftDialog
+          period={draftPeriod}
+          onClose={() => setDraftPeriod(null)}
+          onStarted={(period) => void handleDraftStarted(period)}
+        />
       )}
     </div>
   );

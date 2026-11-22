@@ -76,6 +76,10 @@ const revisePickSchema = z.object({
   occupancy_status: z.enum(["green", "red"]).optional(),
 });
 
+const startDraftSchema = z.object({
+  worker_bee_week_id: z.string().uuid().optional(),
+});
+
 const resumeSchema = z.object({
   reset_auto_skip_counter: z.boolean().optional(),
 });
@@ -250,7 +254,11 @@ async function periodsRoutes(app: FastifyInstance) {
   app.post("/api/v1/periods/:id/start-draft", async (request) => {
     requireCoordinator(request);
     const { id } = request.params as { id: string };
-    const draft = await startDraft(id);
+    const parsed = startDraftSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      throw new AppError(400, "validation_error", "Invalid start draft request", parsed.error.flatten());
+    }
+    const draft = await startDraft(id, parsed.data.worker_bee_week_id);
     logScheduleAction(request, "start_draft", { periodId: id, householdId: request.user?.householdId });
     return { draft };
   });

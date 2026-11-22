@@ -197,7 +197,7 @@ export function HelpPage() {
                 "Go to Periods → Period plan (week start, weeks per period, rounds, count).",
                 "Use Preview weeks before generating so the date ranges look right.",
                 "Generate periods, then set household draft priority as needed.",
-                "When notes are done and you’re ready, Start draft. Households then pick on Calendar.",
+                "When notes are done and you’re ready, Start draft. Leave Worker Bee on Assign later unless you already know that week. Households then pick on Calendar.",
               ]}
               tip="Periods auto-open for notes at the planned opening time. Use Open on calendar from Periods to jump to that month."
               imageSrc="/help/coord-periods-setup.png"
@@ -234,7 +234,7 @@ export function HelpPage() {
               steps={[
                 "When draft ends, status becomes Assign remaining weeks.",
                 "Click unassigned days on the calendar (or use Assign week in Period activity) to fill leftover weeks.",
-                "Assign Worker Bee weeks manually — Worker Bee is excluded from draft turns (group project weeks).",
+                "Worker Bee is excluded from draft turns. If you already know its week, reserve it when you start the draft. Otherwise assign it here with the leftover weeks, before you publish.",
                 "When every week is assigned, Publish period from Period activity. Status becomes Schedule set.",
               ]}
               imageSrc="/help/coord-assign-publish.png"

@@ -455,8 +455,11 @@ export const api = {
       method: "POST",
       body: JSON.stringify({}),
     }),
-  startDraft: (id: string) =>
-    request<{ draft: DraftState }>(`/api/v1/periods/${id}/start-draft`, { method: "POST" }),
+  startDraft: (id: string, workerBeeWeekId?: string) =>
+    request<{ draft: DraftState }>(`/api/v1/periods/${id}/start-draft`, {
+      method: "POST",
+      body: JSON.stringify(workerBeeWeekId ? { worker_bee_week_id: workerBeeWeekId } : {}),
+    }),
   draft: (id: string) => request<{ draft: DraftState }>(`/api/v1/periods/${id}/draft`),
   pickWeek: (periodId: string, turnId: string, period_week_id: string) =>
     request<{ draft: DraftState }>(`/api/v1/periods/${periodId}/turns/${turnId}/pick`, {

@@ -15,7 +15,7 @@ Quick reference for scheduling coordinators. For click-by-click screenshots, use
 1. **Configure plan** — Periods → Period plan (week start, weeks per period, rounds, count). **Preview weeks** before generating.
 2. **Generate periods** — Periods → Generate periods.
 3. **Open** — Auto-open at `opening_at`. Households can add notes.
-4. **Start draft** — Periods → Start draft when ready.
+4. **Start draft** — Periods → Start draft when ready. Leave Worker Bee on “Assign later” unless that work week is already known.
 5. **Draft** — Pick from the calendar day drawer or **Period activity**. Sharing (green/red/none) + confirm. Hold after 2 consecutive auto-skips.
 6. **Assignment** — Assign remaining weeks from the calendar (click unassigned days).
 7. **Publish** — Period activity → Publish when all weeks assigned.
@@ -30,7 +30,7 @@ Quick reference for scheduling coordinators. For click-by-click screenshots, use
 
 - **Swap** — Period activity → swap two assigned weeks (reason required when published).
 - **Revise pick** — During draft, change or release a confirmed pick (drawer or Period activity).
-- **Worker Bee** — Excluded from draft; assign manually in assignment phase.
+- **Worker Bee** — Excluded from draft turns. Optionally reserve one week when starting the draft; otherwise assign it with the leftover weeks before publish.
 - **Post-publish reassign** — Day drawer → reason required; audit + notify.
 - **Reset period** — Clears turns/assignments → Open (dry-runs only).
 
