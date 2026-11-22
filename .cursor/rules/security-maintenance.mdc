@@ -1,0 +1,36 @@
+---
+description: Security reviews, dependency updates, and safe patches for the cabin app
+alwaysApply: false
+---
+
+# Security and maintenance patches
+
+Use this for security reviews and dependency updates. Stack rules in the always-on project rules still apply.
+
+## Safety
+
+- Do not edit `.env`. Placeholders in `.env.example` and `.env.nas.example` may change when a new variable is required. Real values are `SESSION_SECRET`, `POSTGRES_PASSWORD`, `SEED_ADMIN_PASSWORD`, and `SMTP_*`.
+- Do not print those values. There is no payment system.
+- Keep patches small. Do not refactor unrelated UI.
+- Before finishing: `pnpm typecheck` and `pnpm test`. Run `pnpm build` when the web bundle or `Dockerfile` changes.
+- `pnpm test` skips the draft integration suite without Postgres. Start it with `docker compose -f docker-compose.dev.yml up -d` and `DATABASE_URL`. A skip is not a pass.
+
+## Boundaries to keep
+
+- No OAuth, second factor, CSRF token library, or password-hash migration unless asked.
+- Session cookies stay `HttpOnly`, `Secure` in production, and `SameSite=Lax`. The database stores only `hashToken` of the cookie.
+- Login and forgot-password stay rate-limited. `TRUST_PROXY` trusts one connecting proxy hop only.
+- Workflow actions may use Node 24 releases. The app, CI `node-version`, and `node:22-bookworm-slim` stay on Node 22 unless a CVE has no Node 22 fix.
+- Do not publish Postgres. Do not put default production passwords back into `docker-compose.yml`.
+- Schema changes go through Prisma migrations. Do not edit files already in `prisma/migrations/`.
+
+## Review checks
+
+- Mutating routes call `requireAuth`, `requireAdmin`, or `requireCoordinator`. Household-owned records are checked against the caller's household.
+- Validate with Zod at the route. Do not log invite or reset tokens (`redactTokenQuery`).
+- React text is escaped. Flag `dangerouslySetInnerHTML`. CSV export keeps the spreadsheet-formula prefix.
+
+## Dependency patches
+
+- `pnpm audit` only. Do not use npm or yarn.
+- Prefer a patched release on the current major. Take a major only when the advisory is not fixed on the line this app uses.
