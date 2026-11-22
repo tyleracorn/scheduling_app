@@ -10,6 +10,7 @@ import { AppError } from "../lib/errors.js";
 import { canUseSchedulingTools } from "../lib/authority.js";
 import { createPeriod, getRotatedDefaultPriorities } from "../services/periods.js";
 import {
+  activateNextTurn,
   confirmPick,
   getDraftState,
   pickWeek,
@@ -141,10 +142,54 @@ async function createFixture(): Promise<Fixture> {
   };
 }
 
+/** Priorities and turns do not cascade from a household, so drop those before delete. */
+async function releaseFixtureHouseholds(householdIds: string[], userIds: string[]) {
+  const attached = await prisma.periodHouseholdPriority.findMany({
+    where: { householdId: { in: householdIds } },
+    select: { schedulingPeriodId: true },
+  });
+  const periodIds = [...new Set(attached.map((row) => row.schedulingPeriodId))];
+
+  await prisma.assignment.deleteMany({ where: { householdId: { in: householdIds } } });
+  await prisma.draftTurn.deleteMany({ where: { householdId: { in: householdIds } } });
+  await prisma.periodHouseholdPriority.deleteMany({ where: { householdId: { in: householdIds } } });
+  await prisma.invite.deleteMany({
+    where: { OR: [{ householdId: { in: householdIds } }, { invitedByUserId: { in: userIds } }] },
+  });
+
+  for (const periodId of periodIds) {
+    const rows = await prisma.periodHouseholdPriority.findMany({
+      where: { schedulingPeriodId: periodId },
+      orderBy: { position: "asc" },
+    });
+    for (const row of rows) {
+      await prisma.periodHouseholdPriority.update({
+        where: { id: row.id },
+        data: { position: row.position + 1000 },
+      });
+    }
+    for (let i = 0; i < rows.length; i++) {
+      await prisma.periodHouseholdPriority.update({
+        where: { id: rows[i]!.id },
+        data: { position: i + 1 },
+      });
+    }
+
+    const period = await prisma.schedulingPeriod.findUnique({ where: { id: periodId } });
+    if (period?.status !== "draft") continue;
+    const active = await prisma.draftTurn.findFirst({
+      where: { schedulingPeriodId: periodId, status: "active" },
+    });
+    if (!active) await activateNextTurn(periodId);
+  }
+}
+
 async function cleanupFixture(f: Fixture) {
   const userIds = [f.adminId, ...f.households.map((h) => h.userId)];
+  const householdIds = f.households.map((h) => h.id);
   await prisma.auditEvent.deleteMany({ where: { actorUserId: { in: userIds } } });
   await prisma.notification.deleteMany({ where: { userId: { in: userIds } } });
+  await releaseFixtureHouseholds(householdIds, userIds);
   await prisma.schedulingPeriod.deleteMany({ where: { id: f.periodId } });
   for (const h of f.households) {
     await prisma.user.deleteMany({ where: { id: h.userId } });
