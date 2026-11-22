@@ -2,6 +2,7 @@ import { FormEvent, useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
 import { api } from "../lib/api";
 import { useAuth } from "../context/AuthContext";
+import { VersionNote } from "../components/VersionNote";
 
 export function LoginPage() {
   const navigate = useNavigate();
@@ -69,6 +70,9 @@ export function LoginPage() {
         New here? Accounts are created by invitation only. Ask your cabin admin for an invite link
         — you will use that link to set your password and join your household.
       </p>
+      <div className="mt-8">
+        <VersionNote />
+      </div>
     </div>
   );
 }

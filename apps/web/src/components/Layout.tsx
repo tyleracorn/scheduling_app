@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { Link, NavLink, Outlet, useLocation, useNavigate } from "react-router-dom";
 import { NotificationBell } from "./NotificationBell";
+import { VersionNote } from "./VersionNote";
 import { useAuth } from "../context/AuthContext";
 import { useIsCoordinator } from "../hooks/useIsCoordinator";
 
@@ -216,6 +217,9 @@ export function Layout() {
       <main className="flex-1 mx-auto w-full max-w-6xl px-2 sm:px-4 py-3 sm:py-6">
         <Outlet />
       </main>
+      <footer className="mx-auto w-full max-w-6xl px-2 sm:px-4 pb-4">
+        <VersionNote />
+      </footer>
     </div>
   );
 }
