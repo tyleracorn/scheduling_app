@@ -17,6 +17,92 @@ function envFlag(name: string): boolean {
   return value === "1" || value === "true" || value === "yes";
 }
 
+/**
+ * Drop default "Household N" rows recreated by an older seed after the real
+ * households were renamed. Only when the cabin already has a full set of
+ * renamed households, and the default row has no members, invites, assignments,
+ * or an active draft turn.
+ */
+async function removeReseededDefaultHouseholds() {
+  const settings = await prisma.systemSettings.findUnique({ where: { id: 1 } });
+  const slotCount = settings?.householdSlotCount ?? HOUSEHOLDS.length;
+  const defaultNames = new Set(HOUSEHOLDS.map((h) => h.name));
+  const owning = await prisma.household.findMany({
+    where: { isWorkerBee: false },
+    include: {
+      memberships: { select: { id: true } },
+      assignments: { select: { id: true } },
+      invites: { select: { id: true } },
+      draftTurns: { select: { status: true } },
+    },
+  });
+  const customCount = owning.filter((h) => !defaultNames.has(h.name)).length;
+  const removed: string[] = [];
+  const skipped: { name: string; reason: string }[] = [];
+
+  if (customCount >= slotCount) {
+    for (const household of owning) {
+      const seeded = HOUSEHOLDS.find(
+        (d) => d.name === household.name && d.shortCode === household.shortCode,
+      );
+      if (!seeded) continue;
+      if (household.memberships.length > 0) {
+        skipped.push({ name: household.name, reason: "has members" });
+        continue;
+      }
+      if (household.assignments.length > 0) {
+        skipped.push({ name: household.name, reason: "has assignments" });
+        continue;
+      }
+      if (household.invites.length > 0) {
+        skipped.push({ name: household.name, reason: "has invites" });
+        continue;
+      }
+      if (household.draftTurns.some((turn) => turn.status === "active")) {
+        skipped.push({ name: household.name, reason: "active draft turn" });
+        continue;
+      }
+
+      const priorities = await prisma.periodHouseholdPriority.findMany({
+        where: { householdId: household.id },
+        select: { schedulingPeriodId: true },
+      });
+      const periodIds = [...new Set(priorities.map((row) => row.schedulingPeriodId))];
+      await prisma.draftTurn.deleteMany({ where: { householdId: household.id } });
+      await prisma.periodHouseholdPriority.deleteMany({ where: { householdId: household.id } });
+      for (const periodId of periodIds) {
+        const rows = await prisma.periodHouseholdPriority.findMany({
+          where: { schedulingPeriodId: periodId },
+          orderBy: { position: "asc" },
+        });
+        for (const row of rows) {
+          await prisma.periodHouseholdPriority.update({
+            where: { id: row.id },
+            data: { position: row.position + 1000 },
+          });
+        }
+        for (let i = 0; i < rows.length; i++) {
+          await prisma.periodHouseholdPriority.update({
+            where: { id: rows[i]!.id },
+            data: { position: i + 1 },
+          });
+        }
+      }
+      await prisma.household.delete({ where: { id: household.id } });
+      removed.push(household.name);
+    }
+  }
+
+  if (removed.length > 0) {
+    console.info(`Removed reseeded default households: ${removed.join(", ")}`);
+  }
+  if (skipped.length > 0) {
+    console.info(
+      `Left default households in place: ${skipped.map((row) => `${row.name} (${row.reason})`).join(", ")}`,
+    );
+  }
+}
+
 /** Idempotent bootstrap: settings, households, admin. Safe to run on every container start. */
 async function seedBootstrap() {
   await prisma.systemSettings.upsert({
@@ -39,12 +125,14 @@ async function seedBootstrap() {
     update: {},
   });
 
+  const owningBeforeSeed = await prisma.household.count({ where: { isWorkerBee: false } });
   for (const h of HOUSEHOLDS) {
     const existing = await prisma.household.findFirst({ where: { name: h.name } });
-    if (!existing) {
+    if (owningBeforeSeed === 0 && !existing) {
       await prisma.household.create({ data: { ...h, isWorkerBee: false } });
     }
   }
+  await removeReseededDefaultHouseholds();
 
   const workerBee = await prisma.household.findFirst({ where: { isWorkerBee: true } });
   if (!workerBee) {
