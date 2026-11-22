@@ -16,7 +16,7 @@ Single source of truth for cabin scheduling invariants. Prefer this over archive
 - Special household (`isWorkerBee`). At most one.
 - Excluded from draft priority lists and turns.
 - Cannot be a coordinator household.
-- A coordinator may reserve one week when starting the draft by hand. Otherwise assign it in the **assignment** phase, after pick rounds and before publish. Published changes still require a reason. Automatic draft start does not reserve a week.
+- A coordinator may assign or clear Worker Bee weeks while the period is **scheduled** or **open**. During the draft those weeks stay assigned and cannot be changed. After the rounds, assign any remaining Worker Bee weeks with the other leftovers. Published changes still require a reason.
 
 ## Priority across periods
 
@@ -62,6 +62,7 @@ Run through these on desktop and at phone width after draft/assign/swap changes.
 
 ### During draft
 
+- [ ] Before the draft, assign or clear a Worker Bee week from the calendar drawer. During the draft, that control is absent.
 - [ ] Pick a week from the **calendar day drawer** (select week → sharing indicator → confirm).
 - [ ] Pick a week from **Period activity** for the same household/turn; result matches drawer behavior.
 - [ ] Change pick while turn is active from both surfaces.

@@ -455,11 +455,8 @@ export const api = {
       method: "POST",
       body: JSON.stringify({}),
     }),
-  startDraft: (id: string, workerBeeWeekId?: string) =>
-    request<{ draft: DraftState }>(`/api/v1/periods/${id}/start-draft`, {
-      method: "POST",
-      body: JSON.stringify(workerBeeWeekId ? { worker_bee_week_id: workerBeeWeekId } : {}),
-    }),
+  startDraft: (id: string) =>
+    request<{ draft: DraftState }>(`/api/v1/periods/${id}/start-draft`, { method: "POST" }),
   draft: (id: string) => request<{ draft: DraftState }>(`/api/v1/periods/${id}/draft`),
   pickWeek: (periodId: string, turnId: string, period_week_id: string) =>
     request<{ draft: DraftState }>(`/api/v1/periods/${periodId}/turns/${turnId}/pick`, {
@@ -529,6 +526,10 @@ export const api = {
         }),
       },
     ),
+  clearWorkerBeeWeek: (periodId: string, weekId: string) =>
+    request<{ ok: boolean }>(`/api/v1/periods/${periodId}/assignments/${weekId}`, {
+      method: "DELETE",
+    }),
   assignedWeeks: (periodId: string) =>
     request<{
       period_id: string;

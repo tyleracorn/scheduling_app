@@ -27,6 +27,7 @@ import {
 } from "../services/draft.js";
 import {
   assignWeek,
+  clearWorkerBeeWeek,
   getAssignedWeeks,
   getPeriodAssignmentSummary,
   getPeriodSwapHistory,
@@ -74,10 +75,6 @@ const confirmPickSchema = z.object({
 const revisePickSchema = z.object({
   period_week_id: z.string().uuid().nullable(),
   occupancy_status: z.enum(["green", "red"]).optional(),
-});
-
-const startDraftSchema = z.object({
-  worker_bee_week_id: z.string().uuid().optional(),
 });
 
 const resumeSchema = z.object({
@@ -254,11 +251,7 @@ async function periodsRoutes(app: FastifyInstance) {
   app.post("/api/v1/periods/:id/start-draft", async (request) => {
     requireCoordinator(request);
     const { id } = request.params as { id: string };
-    const parsed = startDraftSchema.safeParse(request.body ?? {});
-    if (!parsed.success) {
-      throw new AppError(400, "validation_error", "Invalid start draft request", parsed.error.flatten());
-    }
-    const draft = await startDraft(id, parsed.data.worker_bee_week_id);
+    const draft = await startDraft(id);
     logScheduleAction(request, "start_draft", { periodId: id, householdId: request.user?.householdId });
     return { draft };
   });
@@ -422,6 +415,12 @@ async function periodsRoutes(app: FastifyInstance) {
       parsed.data.reason,
       parsed.data.occupancy_status,
     );
+  });
+
+  app.delete("/api/v1/periods/:periodId/assignments/:weekId", async (request) => {
+    requireCoordinator(request);
+    const { periodId, weekId } = request.params as { periodId: string; weekId: string };
+    return await clearWorkerBeeWeek(periodId, weekId);
   });
 
   app.post("/api/v1/periods/:periodId/assignments/swap", async (request) => {

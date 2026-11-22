@@ -3,7 +3,6 @@ import { AppError } from "../lib/errors.js";
 import { prisma } from "../lib/prisma.js";
 import { toDateString } from "../lib/dates.js";
 import { getSystemSettings } from "./periods.js";
-import { ensureWorkerBeeHousehold } from "./households.js";
 import { notifyAllUsers, notifyCoordinators, notifyHousehold } from "./notifications.js";
 import { applyOccupancyForPeriodWeekId } from "./occupancy-week.js";
 
@@ -283,7 +282,7 @@ async function completeTurn(
   await activateNextTurn(periodId);
 }
 
-export async function startDraft(periodId: string, workerBeeWeekId?: string) {
+export async function startDraft(periodId: string) {
   const period = await prisma.schedulingPeriod.findUnique({ where: { id: periodId } });
   if (!period) throw new AppError(404, "not_found", "Period not found");
   if (period.status !== "open") {
@@ -298,44 +297,15 @@ export async function startDraft(periodId: string, workerBeeWeekId?: string) {
     throw new AppError(422, "no_households", "No active households in priority list");
   }
 
-  let workerBeeId: string | null = null;
-  if (workerBeeWeekId) {
-    const week = await prisma.periodWeek.findFirst({
-      where: { id: workerBeeWeekId, schedulingPeriodId: periodId },
-      include: { assignment: true },
-    });
-    if (!week) throw new AppError(404, "not_found", "Week not found in this period");
-    if (week.assignment) throw new AppError(409, "week_taken", "That week is already assigned");
-
-    const workerBee = await ensureWorkerBeeHousehold();
-    if (!workerBee.active) {
-      throw new AppError(422, "invalid_state", "Worker Bee household is not active");
-    }
-    workerBeeId = workerBee.id;
-  }
-
-  await prisma.$transaction(async (tx) => {
-    await tx.schedulingPeriod.update({
-      where: { id: periodId },
-      data: {
-        status: "draft",
-        draftStartedAt: new Date(),
-        currentRound: 1,
-        consecutiveAutoSkips: 0,
-        draftOnHold: false,
-      },
-    });
-
-    if (workerBeeWeekId && workerBeeId) {
-      await tx.assignment.create({
-        data: {
-          schedulingPeriodId: periodId,
-          periodWeekId: workerBeeWeekId,
-          householdId: workerBeeId,
-          source: "coordinator_manual",
-        },
-      });
-    }
+  await prisma.schedulingPeriod.update({
+    where: { id: periodId },
+    data: {
+      status: "draft",
+      draftStartedAt: new Date(),
+      currentRound: 1,
+      consecutiveAutoSkips: 0,
+      draftOnHold: false,
+    },
   });
 
   await notifyAllUsers(

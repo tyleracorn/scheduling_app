@@ -18,6 +18,7 @@ import { OccupancyChoice } from "./OccupancyChoice";
 import { OccupancyDisclaimer } from "./OccupancyDisclaimer";
 import { NoteCategorySelect } from "./NoteCategorySelect";
 import { WeekSelect } from "./WeekSelect";
+import { WorkerBeePreDraftActions } from "./WorkerBeePreDraftActions";
 
 type Household = { id: string; name: string; color: string; is_worker_bee?: boolean };
 
@@ -107,6 +108,14 @@ export function DayDetailDrawer({
   const unassignedAssignableWeeks = useMemo(
     () => assignableWeeks.filter((w) => !w.assignment),
     [assignableWeeks],
+  );
+
+  const preDraftWeeks = useMemo(
+    () =>
+      coveringWeeks.filter(
+        (w) => w.period_status === "open" || w.period_status === "scheduled",
+      ),
+    [coveringWeeks],
   );
 
   const assignWeek = useMemo(() => {
@@ -463,6 +472,10 @@ export function DayDetailDrawer({
               </dd>
             </div>
           </dl>
+        )}
+
+        {(user.isCoordinator || user.isAdmin) && preDraftWeeks.length > 0 && (
+          <WorkerBeePreDraftActions weeks={preDraftWeeks} onChanged={onChanged} />
         )}
 
         {draftLoading && isDraftWeek && (

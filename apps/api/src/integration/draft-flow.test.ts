@@ -20,7 +20,7 @@ import {
   skipTurn,
   startDraft,
 } from "../services/draft.js";
-import { assignWeek, getPeriodSwapHistory, publishPeriod, swapWeeks } from "../services/assignments.js";
+import { assignWeek, clearWorkerBeeWeek, getPeriodSwapHistory, publishPeriod, swapWeeks } from "../services/assignments.js";
 import { ensureWorkerBeeHousehold } from "../services/households.js";
 import { allocateUniqueShortCode } from "../lib/short-code.js";
 
@@ -477,65 +477,65 @@ describe("draft integration", { skip: !RUN }, () => {
     }
   });
 
-  it("startDraft can reserve one Worker Bee week before the first turn", async () => {
+  it("Worker Bee can be assigned before the draft and is locked once it starts", async () => {
     const f = await createFixture();
     const workerBee = await ensureWorkerBeeHousehold();
     const reservedWeekId = f.weekIds[0]!;
     try {
-      await startDraft(f.periodId, reservedWeekId);
-      const draft = await getDraftState(f.periodId);
+      await assert.rejects(
+        () => assignWeek(f.periodId, reservedWeekId, f.households[0]!.id, f.adminId),
+        (err: unknown) =>
+          err instanceof AppError &&
+          err.statusCode === 422 &&
+          err.code === "invalid_state",
+      );
 
-      const assignment = await prisma.assignment.findUniqueOrThrow({
+      await prisma.schedulingPeriod.update({
+        where: { id: f.periodId },
+        data: { status: "scheduled" },
+      });
+      await assignWeek(f.periodId, reservedWeekId, workerBee.id, f.adminId);
+      await clearWorkerBeeWeek(f.periodId, reservedWeekId);
+      const cleared = await prisma.assignment.findUnique({
         where: { periodWeekId: reservedWeekId },
       });
-      assert.equal(assignment.householdId, workerBee.id);
-      assert.equal(assignment.source, "coordinator_manual");
-      assert.equal(assignment.draftTurnId, null);
-      assert.equal(draft.status, "draft");
+      assert.equal(cleared, null);
+
+      await prisma.schedulingPeriod.update({
+        where: { id: f.periodId },
+        data: { status: "open" },
+      });
+      await assignWeek(f.periodId, reservedWeekId, workerBee.id, f.adminId);
+      const reserved = await prisma.assignment.findUniqueOrThrow({
+        where: { periodWeekId: reservedWeekId },
+      });
+      assert.equal(reserved.householdId, workerBee.id);
+      assert.equal(reserved.source, "coordinator_manual");
+      assert.equal(reserved.draftTurnId, null);
+
+      await startDraft(f.periodId);
+      const draft = await getDraftState(f.periodId);
+      assert.ok(!draft.available_weeks.some((w) => w.period_week_id === reservedWeekId));
       assert.ok(!draft.turns.some((t) => t.household_id === workerBee.id));
       assert.ok(draft.active_turn);
       assert.notEqual(draft.active_turn.household_id, workerBee.id);
-      assert.ok(!draft.available_weeks.some((w) => w.period_week_id === reservedWeekId));
-    } finally {
-      await prisma.assignment.deleteMany({ where: { householdId: workerBee.id } });
-      await cleanupFixture(f);
-    }
-  });
 
-  it("startDraft without a week leaves Worker Bee unassigned", async () => {
-    const f = await createFixture();
-    const workerBee = await ensureWorkerBeeHousehold();
-    try {
-      await startDraft(f.periodId);
-      const draft = await getDraftState(f.periodId);
-      const assignments = await prisma.assignment.findMany({
-        where: { schedulingPeriodId: f.periodId, householdId: workerBee.id },
-      });
-      assert.equal(assignments.length, 0);
-      assert.equal(draft.status, "draft");
-      assert.equal(draft.available_weeks.length, f.weekIds.length);
-    } finally {
-      await cleanupFixture(f);
-    }
-  });
-
-  it("startDraft with an unknown week does not start the draft", async () => {
-    const f = await createFixture();
-    try {
       await assert.rejects(
-        () => startDraft(f.periodId, "00000000-0000-4000-8000-000000000099"),
+        () => assignWeek(f.periodId, f.weekIds[1]!, workerBee.id, f.adminId),
         (err: unknown) =>
-          err instanceof AppError && err.statusCode === 404 && err.code === "not_found",
+          err instanceof AppError &&
+          err.statusCode === 422 &&
+          err.code === "invalid_state",
       );
-      const period = await prisma.schedulingPeriod.findUniqueOrThrow({
-        where: { id: f.periodId },
-      });
-      assert.equal(period.status, "open");
-      const assignments = await prisma.assignment.count({
-        where: { schedulingPeriodId: f.periodId },
-      });
-      assert.equal(assignments, 0);
+      await assert.rejects(
+        () => clearWorkerBeeWeek(f.periodId, reservedWeekId),
+        (err: unknown) =>
+          err instanceof AppError &&
+          err.statusCode === 422 &&
+          err.code === "invalid_state",
+      );
     } finally {
+      await prisma.assignment.deleteMany({ where: { householdId: workerBee.id, schedulingPeriodId: f.periodId } });
       await cleanupFixture(f);
     }
   });

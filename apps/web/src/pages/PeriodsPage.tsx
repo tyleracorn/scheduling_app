@@ -6,7 +6,6 @@ import { calendarPathForPeriod, coordinatePathForPeriod } from "../lib/period-na
 import { useAuth } from "../context/AuthContext";
 import { PeriodPlanForm } from "../components/PeriodPlanForm";
 import { PeriodPriorityEditor, PeriodPriorityReadOnly } from "../components/PeriodPriorityEditor";
-import { StartDraftDialog } from "../components/StartDraftDialog";
 
 function statusLabel(status: string) {
   const map: Record<string, string> = {
@@ -40,7 +39,6 @@ export function PeriodsPage() {
   const [error, setError] = useState<string | null>(null);
   const [message, setMessage] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
-  const [draftPeriod, setDraftPeriod] = useState<Period | null>(null);
 
   const isCoordinator = !!(user?.isCoordinator || user?.isAdmin);
 
@@ -74,18 +72,18 @@ export function PeriodsPage() {
     }
   }
 
-  function openStartDraft(period: Period) {
+  async function startDraft(id: string) {
+    if (!confirm("Start the draft? Households will be notified.")) return;
+    setBusy(true);
     setError(null);
-    setDraftPeriod(period);
-  }
-
-  async function handleDraftStarted(period: Period) {
-    setDraftPeriod(null);
     try {
-      const detail = await api.period(period.id);
+      await api.startDraft(id);
+      const detail = await api.period(id);
       navigate(coordinatePathForPeriod(detail.period.start_date, detail.period.id));
     } catch (err) {
-      setError(err instanceof Error ? err.message : "Draft started, but the calendar could not be opened");
+      setError(err instanceof Error ? err.message : "Start draft failed");
+    } finally {
+      setBusy(false);
     }
   }
 
@@ -198,7 +196,7 @@ export function PeriodsPage() {
                     <button
                       type="button"
                       disabled={busy}
-                      onClick={() => openStartDraft(p)}
+                      onClick={() => void startDraft(p.id)}
                       className="rounded bg-indigo-600 px-3 py-1.5 text-sm text-white hover:bg-indigo-700 disabled:opacity-50"
                     >
                       Start draft
@@ -250,6 +248,11 @@ export function PeriodsPage() {
               {p.weeks && (
                 <p className="text-xs text-slate-500 mt-2">{p.weeks.length} weeks</p>
               )}
+              {p.status === "open" && isCoordinator && (
+                <p className="text-xs text-slate-600 mt-2">
+                  Open the calendar to assign Worker Bee weeks before you start the draft.
+                </p>
+              )}
               {p.status === "draft" && (
                 <p className="text-xs text-indigo-700 mt-2">
                   Use the indigo <strong>Draft</strong> panel on the calendar to pick or skip.
@@ -268,14 +271,6 @@ export function PeriodsPage() {
             </li>
           ))}
         </ul>
-      )}
-
-      {draftPeriod && (
-        <StartDraftDialog
-          period={draftPeriod}
-          onClose={() => setDraftPeriod(null)}
-          onStarted={(period) => void handleDraftStarted(period)}
-        />
       )}
     </div>
   );

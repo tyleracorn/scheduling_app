@@ -142,6 +142,19 @@ export function CalendarShell({ mode, title, subtitle }: CalendarShellProps) {
 
   const schedulingWeekStartDay = data?.settings.week_start_day ?? 0;
   const weeks = data?.weeks ?? [];
+
+  useEffect(() => {
+    setSelected((current) => {
+      if (!current) return current;
+      const date = new Date(`${current.date}T12:00:00Z`);
+      const coveringWeeks = coveringWeeksForDay(date, weeks);
+      const week =
+        coveringWeeks.find((item) => item.period_week_id === current.week?.period_week_id) ??
+        coveringWeeks[0] ??
+        null;
+      return { ...current, week, coveringWeeks };
+    });
+  }, [weeks]);
   const notes = data?.notes ?? [];
   const occupancy = data?.occupancy ?? [];
   const range = monthRange(year, month);

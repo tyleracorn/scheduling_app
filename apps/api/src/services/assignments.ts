@@ -64,10 +64,6 @@ export async function assignWeek(
 ) {
   const period = await prisma.schedulingPeriod.findUnique({ where: { id: periodId } });
   if (!period) throw new AppError(404, "not_found", "Period not found");
-  if (period.status !== "assignment" && period.status !== "published") {
-    throw new AppError(422, "invalid_state", "Assignments can only be changed during assignment or after publish");
-  }
-
   const week = await prisma.periodWeek.findFirst({
     where: { id: weekId, schedulingPeriodId: periodId },
     include: { assignment: { include: { household: true } } },
@@ -78,6 +74,15 @@ export async function assignWeek(
     where: { id: householdId, active: true },
   });
   if (!household) throw new AppError(404, "not_found", "Household not found");
+
+  const preDraftWorkerBee =
+    (period.status === "scheduled" || period.status === "open") && household.isWorkerBee;
+  if (!preDraftWorkerBee && period.status !== "assignment" && period.status !== "published") {
+    throw new AppError(422, "invalid_state", "Assignments can only be changed during assignment or after publish");
+  }
+  if (preDraftWorkerBee && week.assignment && !week.assignment.household.isWorkerBee) {
+    throw new AppError(409, "week_taken", "That week is already assigned");
+  }
 
   const isPublishedEdit = period.status === "published";
   if (isPublishedEdit && !reason?.trim()) {
@@ -162,6 +167,27 @@ export async function assignWeek(
       updated_at: assignment.updatedAt.toISOString(),
     },
   };
+}
+
+export async function clearWorkerBeeWeek(periodId: string, weekId: string) {
+  const period = await prisma.schedulingPeriod.findUnique({ where: { id: periodId } });
+  if (!period) throw new AppError(404, "not_found", "Period not found");
+  if (period.status !== "scheduled" && period.status !== "open") {
+    throw new AppError(422, "invalid_state", "Worker Bee weeks can only be cleared before the draft starts");
+  }
+
+  const week = await prisma.periodWeek.findFirst({
+    where: { id: weekId, schedulingPeriodId: periodId },
+    include: { assignment: { include: { household: true } } },
+  });
+  if (!week) throw new AppError(404, "not_found", "Week not found in this period");
+  if (!week.assignment) throw new AppError(404, "not_found", "Week is not assigned");
+  if (!week.assignment.household.isWorkerBee) {
+    throw new AppError(422, "invalid_state", "Only a Worker Bee week can be cleared before the draft starts");
+  }
+
+  await prisma.assignment.delete({ where: { periodWeekId: weekId } });
+  return { ok: true };
 }
 
 export async function swapWeeks(
